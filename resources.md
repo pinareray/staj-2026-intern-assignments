@@ -81,6 +81,56 @@ Bu kaynak listesi, projeleri geliştirecek stajyerlere yol göstermek amacıyla 
 
 ---
 
+## 2026 Ek Kaynakları (AI, Tasarım, QA & Modern Stack)
+
+Bu sene projeler AI destekli tasarım, test otomasyonu ve kendi geliştirme araçlarınızı üretme etrafında dönüyor. Aşağıdaki kaynaklar bu yeni yetkinlikler içindir.
+
+### **AI Destekli Tasarım**
+* **Google Stitch** — prompt'tan UI ekranı üretme: <https://stitch.withgoogle.com>
+* **Figma** (design system + token): <https://www.figma.com>
+* **Claude** ile tasarım sistemi planlama (renk/tipografi/spacing token'ları, komponent listesi).
+* İpucu: Önce token'ları tanımlayın, sonra ekranları; boş/yükleniyor/hata durumlarını da tasarlayın.
+
+### **QA & Test Otomasyonu**
+* **Playwright** (web E2E): <https://playwright.dev>
+* **Cypress** (web E2E): <https://www.cypress.io>
+* **Maestro** (mobil E2E): <https://maestro.mobile.dev>
+* **Postman / Bruno** (API test): <https://www.usebruno.com>
+* API testleri: xUnit (.NET) · Jest/Vitest (Node) · pytest (Python).
+* İpucu: Test piramidi — çok unit, orta entegrasyon, az E2E. CI'da (GitHub Actions) çalıştırın.
+
+### **Modern Backend (2026)**
+* **NestJS** (Node + TS): <https://nestjs.com>
+* **FastAPI** (Python): <https://fastapi.tiangolo.com>
+* **Clean Architecture .NET** şablonu: <https://github.com/jasontaylordev/CleanArchitecture>
+* **Prisma ORM**: <https://www.prisma.io/docs/>
+* OpenAPI 3.1 ile "contract-first"; hata formatı için **Problem Details (RFC 9457)**.
+
+### **Modern Frontend (2026)**
+* **TanStack Query** (sunucu durumu/cache): <https://tanstack.com/query>
+* **openapi-typescript** (OpenAPI'den otomatik tip): <https://github.com/openapi-ts/openapi-typescript>
+* **Next.js** (App Router): <https://nextjs.org> · **Angular Signals**: <https://angular.dev/guide/signals>
+* **Zustand**: <https://github.com/pmndrs/zustand>
+
+### **Modern Mobil (2026)**
+* **Riverpod**: <https://riverpod.dev> · **Dio**: <https://pub.dev/packages/dio> · **go_router**: <https://pub.dev/packages/go_router> · **freezed**: <https://pub.dev/packages/freezed>
+
+### **Generatif AI Servisleri**
+* **Claude API (Anthropic)**: <https://docs.anthropic.com>
+* **Google Gemini API**: <https://ai.google.dev/docs>
+* İpucu: Öneri/üretim için **yapılandırılmış (JSON) çıktı** isteyin; gerçek verinize dayandırın (RAG). API anahtarlarını `.env`'de tutun.
+
+### **Sistem Mimarisi (StackShare Replica için)**
+* **StackShare**: <https://stackshare.io> (örn. Uber: <https://stackshare.io/uber-technologies/uber>)
+* Her teknoloji seçiminin yanına **"neden"** (trade-off) yazın.
+
+### **Kendi Skill / Command / Agent'larınızı Üretme**
+* Claude Code dokümanları: <https://docs.claude.com/en/docs/claude-code/overview>
+* Skill/agent dosyalarını `.claude/skills/` ve `.claude/agents/` altında kendiniz oluşturun.
+* Detaylı rehber: [`source/team_skills_agents.md`](./source/team_skills_agents.md).
+
+---
+
 ## Proje Teslim Kılavuzu
 
 ### **1. Etkili Bir README.md Dosyası Hazırlama**

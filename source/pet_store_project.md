@@ -1,58 +1,97 @@
-# Stajyerler için 1 Haftalık Proje Planı: Pet Store
+# 3b. Upgrade Projesi: Pet Store (2026 Sürümü)
 
-Bu proje, öğrencilerin Backend, Frontend, Mobil ve Yapay Zeka geliştirme alanlarındaki yetkinliklerini kullanarak tam teşekküllü bir "Pet Store" uygulaması geliştirmelerini hedefler. Proje, dört ana takıma ayrılmıştır. Her takım, bir hafta içinde kendi alanındaki görevleri tamamlayarak projenin bütünleşik bir şekilde çalışmasına katkıda bulunacaktır.
+> **Min. Ekip:** 1–2 kişi
+> **Takımlar:** Backend · Frontend (Web) · Mobil · AI · QA
+> **Teknik Seviye:** ⭐⭐⭐ Orta (Çok teknolojili, AI dahil)
 
-**Ana Referans API:** [Swagger Petstore](https://petstore.swagger.io/)
-
----
-
-## 1. Backend Projesi: Pet Store API Geliştirme
-
-**Amaç:** Frontend, Mobil ve AI uygulamalarının ihtiyaç duyacağı veri ve servis altyapısını sağlamak. `pet`, `store` ve `user` kaynakları için CRUD operasyonlarını içeren endpoint'ler geliştirmek.
-
-**Teknolojiler:**
-- **Seçenek 1 (Node.js):** Express.js, TypeScript, Prisma veya Mongoose. Veritabanı olarak SQLite veya PostgreSQL.
-- **Seçenek 2 (.NET):** .NET Core Web API, Entity Framework Core. Veritabanı olarak SQL Server Express veya SQLite.
-
-**Beklenen Çıktı:** Postman ile test edilebilir, belgelenmiş (Swagger/OpenAPI) ve dağıtıma hazır bir API servisi.
+Geçen seneki "Pet Store" projesinin **2026 standartlarına yükseltilmiş** hali. CRUD'un ötesine geçip **AI özelliklerini, test otomasyonunu ve modern mimariyi** merkeze alıyoruz. Referans hâlâ [Swagger Petstore](https://petstore.swagger.io/), ama artık kendi tasarımınız ve kendi AI servisinizle.
 
 ---
 
-## 2. Frontend Projesi: Pet Store Web Uygulaması
+## Geçen Seneye Göre Ne Değişti? (2026 Yenilikleri)
 
-**Referans Tasarım:** [Figma - Pet Shop App Landing Page](https://www.figma.com/community/file/1333739760381547963/app-landing-page-pet-shop-community)
-
-**Amaç:** Kullanıcıların evcil hayvanları listeleyebileceği, detaylarını görebileceği ve satın alabileceği interaktif ve responsive bir web sitesi geliştirmek.
-
-**Teknolojiler:**
-- **Seçenek 1 (React):** Vite, Next.js, Context API/Redux Toolkit, Tailwind CSS.
-- **Seçenek 2 (Angular):** Angular CLI, RxJS, Angular Material.
-
-**Beklenen Çıktı:** Figma tasarımına sadık, API ile entegre çalışan ve dağıtıma hazır bir web uygulaması.
+- Tasarım **Google Stitch + Claude** ile üretilen kendi design system'iniz.
+- AI servisi 2026 modelleriyle (**Claude / Gemini**) ve daha akıllı: sadece metin üretimi değil, **RAG tabanlı öneri** ve **görsele göre tür tahmini** (bonus).
+- **QA rolü** eklendi: API + E2E testleri.
+- Backend'de OpenAPI-first, tutarlı hata formatı, Docker.
+- Frontend/mobil tipleri OpenAPI'den otomatik.
 
 ---
 
-## 3. Mobil Projesi: Pet Store Mobil Uygulaması
+## 1. Backend: Pet Store API
 
-**Referans Tasarım:** [Figma - Pet Shop App Community](https://www.figma.com/community/file/1431013424494506863/pet-shop-app-community)
+**Kaynaklar:** `pet`, `category`, `store/order`, `user` için CRUD + arama/filtre + sayfalama.
 
-**Amaç:** iOS ve Android'de çalışabilen, kullanıcıların evcil hayvanları görüntüleyip arayabileceği, favorilerine ekleyebileceği bir mobil uygulama oluşturmak.
+**Teknoloji:** Node.js (NestJS/Express + Prisma) · .NET (EF Core) · FastAPI.
 
-**Teknolojiler:**
-- Flutter SDK, Dart, Provider/BLoC, http.
+**2026 Standartları:**
+- OpenAPI 3.1 dokümanı gün 1'de; tutarlı hata formatı (Problem Details).
+- Sayfalama/filtre/arama standardı; seed verisi.
+- Dosya yükleme (pet fotoğrafı) desteği.
+- Docker + `.env`.
 
-**Beklenen Çıktı:** Emülatörde çalıştırılabilen, API entegrasyonu tamamlanmış bir mobil uygulama.
+**Beklenen Çıktı:** Swagger'lı, seed'li, Docker ile ayağa kalkan, AI servisinin de tüketebileceği API.
 
 ---
 
-## 4. Yapay Zeka Projesi: Akıllı Evcil Hayvan Asistanı
+## 2. Frontend: Pet Store Web
 
-**Amaç:** İki temel AI özelliği sunan bir servis oluşturmak:
-1.  **Otomatik İçerik Üretimi:** Sisteme yeni eklenen bir evcil hayvan için (tür, yaş, cins gibi temel bilgilere dayanarak) otomatik olarak ilgi çekici ve sıcak bir tanıtım metni oluşturmak.
-2.  **Kişiselleştirilmiş Öneri:** Kullanıcının yaşam tarzı ve tercihlerine (örneğin "apartmanda yaşıyorum", "enerjik bir köpek arıyorum") göre en uygun evcil hayvanları önermek.
+**Tasarım:** Google Stitch + Claude ile design system. Ekranlar: liste (grid + filtre), detay, favoriler, sepet/sipariş, admin (pet ekle/düzenle).
 
-**Teknolojiler:**
-- **Dil ve Çerçeve:** Python ve FastAPI veya Flask.
-- **Yapay Zeka:** Google Gemini veya OpenAI GPT gibi bir üretken yapay zeka modelinin API'si.
+**Teknoloji:** React (Vite/Next + TS + TanStack Query) veya Angular (Signals).
 
-**Beklenen Çıktı:** Frontend ve mobil ekiplerin çağırabileceği, en az iki adet endpoint'e (`/generate-description` ve `/recommend-pet`) sahip, test edilebilir bir AI servisi.
+**2026 Standartları:** OpenAPI'den tip üretimi, skeleton/empty/error state, erişilebilirlik, optimistic favori ekleme.
+
+**Beklenen Çıktı:** API entegre, tasarıma sadık, AI özelliklerini (açıklama/öneri) gösteren web uygulaması.
+
+---
+
+## 3. Mobil: Pet Store Uygulaması
+
+**Teknoloji:** Flutter (Riverpod/BLoC + Dio) veya React Native.
+
+**2026 Standartları:** Clean Architecture, tipli ağ katmanı, offline/hata durumları. Tekrar eden işleri kendi skill'inize dönüştürün ([`team_skills_agents.md`](./team_skills_agents.md)).
+
+**Beklenen Çıktı:** Liste, detay, favori, arama; AI önerilerini gösteren, API entegre mobil uygulama.
+
+---
+
+## 4. AI: Akıllı Evcil Hayvan Asistanı (2026)
+
+**Endpoint'ler:**
+- `POST /generate-description` — türe/yaşa/cinse göre sıcak tanıtım metni.
+- `POST /recommend-pet` — yaşam tarzına göre öneri (örn. "apartmanda yaşıyorum, sakin bir kedi").
+- **Bonus:** `POST /classify-image` — fotoğraftan tür/cins tahmini (vision model).
+
+**Teknoloji:** Python + FastAPI; **Claude** veya **Gemini** API.
+
+**2026 Standartları:**
+- **RAG:** Öneriyi backend'deki gerçek pet verisine dayandırın (rastgele uydurmasın) — pet listesini bağlam olarak modele verin veya basit bir vektör arama ekleyin.
+- Prompt'ları versiyonlayın; çıktıyı **yapılandırılmış (JSON) formatta** isteyin ve doğrulayın.
+- API anahtarlarını `.env`'de tutun; hız/hata yönetimi (retry).
+
+**Beklenen Çıktı:** Frontend/mobilin çağırabileceği, gerçek veriye dayalı, test edilebilir AI servisi.
+
+---
+
+## 5. QA: Test Seti
+
+- Backend API testleri + Postman/Newman.
+- Web E2E (Playwright/Cypress): pet ara → detay → favori/sipariş.
+- Mobil: Maestro flow.
+- AI: çıktı doğrulama testleri (JSON şeması, boş/uç girdiler).
+
+**Beklenen Çıktı:** Test planı + kritik akış otomasyonu, CI yeşil.
+
+---
+
+## Definition of Done
+
+- [ ] API Swagger'lı, seed'li, Docker ile çalışıyor.
+- [ ] Web + mobil gerçek API'yi tüketiyor.
+- [ ] AI servisi gerçek pet verisine dayalı, JSON çıktı veriyor.
+- [ ] QA: en az bir kritik akış otomatik test edilmiş.
+- [ ] Her takımın `README`'si (kurulum + gerekçe + ekran görüntüsü).
+- [ ] **Demo videosu** kendi YouTube kanalınızda; link `README`'de.
+- [ ] Teslim: repo clone/fork → **PR veya issue** ile proje anlatıldı.
+- [ ] Kendi skill/command/agent'ınız — bkz. [`team_skills_agents.md`](./team_skills_agents.md).
