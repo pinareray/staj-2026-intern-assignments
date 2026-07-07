@@ -1,6 +1,6 @@
-# Staj 2025 Ödev Repo Ana Sayfası
+# Staj Ödev Repo Ana Sayfası
 
-Bu repository, **VB10 Staj 2025** kapsamında stajyerlere ödevler vermek ve ödev teslim süreçlerini yönetmek amacıyla oluşturulmuştur.
+Bu repository, **VB10 Staj programı** kapsamında stajyerlere ödevler vermek ve ödev teslim süreçlerini yönetmek amacıyla oluşturulmuştur. Aktif dönem: **2026**.
 
 ## Amaç
 
@@ -8,49 +8,49 @@ Bu repository, **VB10 Staj 2025** kapsamında stajyerlere ödevler vermek ve öd
 - Teslim edilen ödevlerin takibini ve değerlendirmesini kolaylaştırmak.
 - Staj sürecinde öğrenmeyi ve gelişimi teşvik etmek.
 
-## Mevcut Projeler
+> 🚀 **Yeni misin?** Hangi projeyi seçeceğine ve neye ihtiyacın olduğuna karar vermek için önce → [**HOW-TO rehberi**](./HOW-TO.md)
 
-### 📋 [Login Sistemi Projesi](./source/login_project.md)
+## 2026 Projeleri
 
-**Süre:** 1 hafta  
-**Takımlar:** Backend (.NET), Frontend (React/Angular), Mobil (Flutter)
+Bu sene 3 yol var: iki yeni proje ve geçen seneden 2026 standartlarına yükseltilmiş projeler. Hepsinde ortak yaklaşım: **çok rollü takım çalışması** (PM · Design · Backend · Frontend · Mobil · QA), **AI destekli tasarım** (Google Stitch + Claude) ve son aşamada **kendi skill/agent'larınızı üretmek**.
 
-Modern bir web ve mobil uygulamanın temel taşı olan kimlik doğrulama (authentication) sistemini geliştirmeye odaklanan kapsamlı bir proje. Her takım kendi alanında JWT tabanlı güvenli login/register akışı oluşturacaktır.
+### 🛒 [E-Ticaret Uygulaması](./source/ecommerce_project.md) — Ana Proje
 
-**Özellikler:**
-- 🔐 JWT tabanlı authentication API
-- 🌐 Modern ve responsive web arayüzü (Figma tasarımına uygun)
-- 📱 Cross-platform mobil uygulama
+**Süre:** 2 hafta · **Roller:** PM · Design · Backend · Frontend · Mobil · QA
 
-### 🐾 [Pet Store Projesi](./source/pet_store_project.md)
+Tasarımdan teste uçtan uca gerçek bir ürün: ürün listeleme/arama, sepet, checkout, sipariş. Tasarım Google Stitch + Claude ile, backend/frontend teknolojilerini ekip kendi seçer, QA test yazar, PM projeyi yönetir.
 
-**Süre:** 1 hafta  
-**Takımlar:** Backend (Node.js/.NET), Frontend (React/Angular), Mobil (Flutter), AI (Python)
+### 🧩 [StackShare Replica](./source/replica_project.md)
 
-Tam teşekküllü bir "Pet Store" uygulaması geliştiren, dört farklı teknoloji alanını kapsayan proje. [Swagger Petstore](https://petstore.swagger.io/) referans API'sini temel alır.
+**Süre:** 1–2 hafta · **Odak:** Sistem mimarisi
 
-**Özellikler:**
-- 🛍️ CRUD operasyonları ile Pet Store API
-- 🎨 Modern ve interaktif web uygulaması
-- 📱 iOS/Android uyumlu mobil uygulama
-- 🤖 AI destekli içerik üretimi ve kişiselleştirilmiş öneriler
+[StackShare](https://stackshare.io)'den gerçek bir sistem (ör. [Uber](https://stackshare.io/uber-technologies/uber)) seçip çekirdek akışının çalışan bir MVP'sini üretmek. Mimari kararları ve trade-off'ları öğrenmek.
+
+### ⬆️ Upgrade Projeleri (2026 sürümü)
+
+- 📋 [**Login Sistemi**](./source/login_project.md) — refresh token, güvenlik, otomatik test. *(Isınma projesi.)*
+- 🐾 [**Pet Store**](./source/pet_store_project.md) — RAG tabanlı AI, modern mimari, QA. Referans: [Swagger Petstore](https://petstore.swagger.io/).
+
+### 🤖 [Ortak Son Aşama: Kendi Skill & Agent'larınız](./source/team_skills_agents.md)
+
+Hangi projeyi seçerseniz seçin, geliştirme akışınızdaki tekrarları birer **skill / slash command / agent** haline getireceksiniz. 2026'nın anahtar becerisi: AI'ı kullanan değil, **AI aracını üreten** olmak.
 
 ## Ödev Teslim Süreci
 
-Ödevinizi tamamladıktan sonra iki farklı yöntemle teslim edebilirsiniz:
+Her proje iki adımla tamamlanmış sayılır: **demo videosu** + **kod teslimi**. Detaylı seçim rehberi için → [HOW-TO](./HOW-TO.md).
 
-### 1. Fork ve Pull Request (PR) Yöntemi
+### 📹 1. Demo Videosu (zorunlu)
 
-1. Bu repoyu kendi GitHub hesabınıza **fork** edin.
-2. Ödevinizi kendi fork'unuzda tamamlayın.
-3. Değişikliklerinizi ana repoya göndermek için bir **Pull Request (PR)** açın.
+- Projenizin çalışan halini anlatan bir **demo videosu** çekin.
+- Videoyu **kendi YouTube kanalınızda** yayınlayın ve linkini `README` + PR/issue açıklamanıza ekleyin.
+- İçerik: ne yaptığınız, teknoloji seçim gerekçeleriniz ve ana akışın canlı çalışması.
 
-### 2. Issue Açma Yöntemi
+### 🔀 2. Kod Teslimi (PR veya Issue)
 
-1. Repoda yeni bir **issue** açın.
-2. Issue açıklamasında ödevinize ait kodu, linkleri veya dosyaları paylaşın.
+Bu repoyu **clone/fork** edip projenizi tamamladıktan sonra iki yöntemden biriyle teslim edin:
 
-Her iki yöntemi de kullanabilirsiniz; seçim size aittir.
+- **Fork + Pull Request:** Fork'layın, geliştirin, yaptığınız işi anlatan bir **PR** açın. *(Farklar PR'da net görünür — önerilen yöntem.)*
+- **Issue:** Yeni bir **issue** açıp kodunuzu, linklerinizi ve demo videosunu paylaşarak projeyi anlatın.
 
 ## İletişim ve Destek
 
