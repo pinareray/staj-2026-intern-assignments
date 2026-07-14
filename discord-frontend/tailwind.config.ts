@@ -9,28 +9,29 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // micodex light theme + crimson accent
         "primary-container": "#ad2831",
-        "surface-container-lowest": "#0f0e0a",
-        "surface": "#14140f",
-        "background": "#14140f",
-        "surface-container-highest": "#36352f",
-        "outline-variant": "#594140",
-        "surface-container-high": "#2b2a24",
-        "on-surface": "#e6e2d9",
-        "on-surface-variant": "#e1bfbd",
+        "surface-container-lowest": "#ffffff",
+        "surface": "#ffffff",
+        "background": "#f7f4ef",
+        "surface-container-highest": "#e7e2da",
+        "outline-variant": "#d6d3d1",
+        "surface-container-high": "#ede9e3",
+        "on-surface": "#1c1917",
+        "on-surface-variant": "#78716c",
         "secondary-container": "#8f1b1c",
-        "surface-container": "#20201a",
-        "surface-container-low": "#1c1c16",
-        "on-background": "#e6e2d9",
-        "primary": "#ffb3b0",
-        "outline": "#a88988",
-        "on-primary": "#e6e2d9",
-        "on-primary-fixed-variant": "#ffb3b0",
-        // Crimson Library arkaplan renkleri
-        "mahogany-dark": "#250902",
-        "mahogany-red": "#38040e",
-        "black-cherry": "#640d14",
-        "dark-wine": "#800e13",
+        "surface-container": "#f3efe8",
+        "surface-container-low": "#f5f5f4",
+        "on-background": "#1c1917",
+        "primary": "#ad2831",
+        "outline": "#a8a29e",
+        "on-primary": "#ffffff",
+        "on-primary-fixed-variant": "#8f1b1c",
+        // Layout eşlemeleri (eski sınıf adları → light)
+        "mahogany-dark": "#efeae3",
+        "mahogany-red": "#ffffff",
+        "black-cherry": "#f3efe8",
+        "dark-wine": "#e7e2da",
       },
       fontFamily: {
         "libre": ["'Libre Caslon Text'", "serif"],
@@ -44,7 +45,6 @@ const config: Config = {
         "xl": "80px",
       },
       maxWidth: {
-        // Özel spacing token'ları max-w-md gibi sınıfları ezmesin diye
         "md": "28rem",
         "lg": "32rem",
         "xl": "36rem",

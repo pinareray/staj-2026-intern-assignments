@@ -42,7 +42,7 @@ export default function SocialLoginButtons({
   onAppleClick,
 }: SocialLoginButtonsProps) {
   const buttonClass =
-    "flex flex-1 items-center justify-center gap-2 rounded-xl border border-outline-variant/30 bg-transparent py-3 text-sm font-hanken text-on-surface transition-all hover:border-primary-container/40 hover:bg-surface-container-low/60 active:scale-[0.98]";
+    "flex flex-1 items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white py-3 text-sm font-hanken text-stone-800 transition-all hover:border-primary-container/40 hover:bg-stone-50 active:scale-[0.98]";
 
   return (
     <div className="flex gap-3">
