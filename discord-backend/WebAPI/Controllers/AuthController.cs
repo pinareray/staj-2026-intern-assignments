@@ -1,4 +1,5 @@
 using Application.Features.Auth.Commands.Login;
+using Application.Features.Auth.Commands.Register;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
@@ -26,6 +27,14 @@ namespace WebAPI.Controllers
             var token = await _mediator.Send(command);
 
             // Mutfaktan dönen Token'ı 200 OK koduyla telefona geri yolla.
+            return Ok(new { Token = token });
+        }
+
+        // "Kayıt Ol" isteği: yeni kullanıcı oluşturur ve JWT döner.
+        [HttpPost("register")]
+        public async Task<IActionResult> Register([FromBody] RegisterCommand command)
+        {
+            var token = await _mediator.Send(command);
             return Ok(new { Token = token });
         }
     }

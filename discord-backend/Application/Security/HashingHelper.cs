@@ -4,6 +4,16 @@ namespace Application.Security
 {
     public static class HashingHelper
     {
+        // Yeni kayıt sırasında rastgele bir Salt üretir ve şifreyi HMACSHA512 ile hashler.
+        public static void CreatePasswordHash(string password, out byte[] passwordHash, out byte[] passwordSalt)
+        {
+            using (var hmac = new System.Security.Cryptography.HMACSHA512())
+            {
+                passwordSalt = hmac.Key;
+                passwordHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(password));
+            }
+        }
+
         // Discord'un yaptığı gibi, kullanıcının girdiği düz şifreyi (örneğin "123456"), 
         // veri tabanındaki tuz (Salt) ile tekrar çırpıyoruz. Eğer sonuç, veri tabanındaki 
         // Hash ile aynı çıkarsa "Şifre doğru" diyoruz.

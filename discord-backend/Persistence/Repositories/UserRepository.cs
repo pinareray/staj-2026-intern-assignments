@@ -19,11 +19,22 @@ namespace Persistence.Repositories
         }
 
         // Sözleşmedeki metodun gerçek kodlarla (SQL karşılığıyla) doldurulmuş hali.
-        public async Task<User> GetByEmailAsync(string email)
+        public async Task<User?> GetByEmailAsync(string email)
         {
             // Entity Framework bu C# kodunu şu SQL sorgusuna çevirir:
             // SELECT * FROM Users WHERE Email = @email LIMIT 1;
             return await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+        }
+
+        public async Task<bool> EmailExistsAsync(string email)
+        {
+            return await _context.Users.AnyAsync(u => u.Email == email);
+        }
+
+        public async Task AddAsync(User user)
+        {
+            await _context.Users.AddAsync(user);
+            await _context.SaveChangesAsync();
         }
     }
 }

@@ -32,7 +32,9 @@ namespace Infrastructure.Security
             };
 
             // 2. Güvenlik Anahtarı (Token'ı kimse sahtesiyle değiştiremesin diye).
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["TokenOptions:SecurityKey"]));
+            var securityKey = _configuration["TokenOptions:SecurityKey"]
+                ?? throw new InvalidOperationException("TokenOptions:SecurityKey yapılandırması eksik.");
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(securityKey));
             
             // 3. Şifreleme Algoritması (HMAC SHA-512 endüstri standartıdır).
             var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha512Signature);

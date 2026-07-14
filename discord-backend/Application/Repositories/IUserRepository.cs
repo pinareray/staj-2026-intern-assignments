@@ -11,6 +11,8 @@ namespace Application.Repositories
     // İçeride Supabase mi var SQL mi var beni ilgilendirmez."
     public interface IUserRepository
     {
-        Task<User> GetByEmailAsync(string email);
+        Task<User?> GetByEmailAsync(string email);
+        Task<bool> EmailExistsAsync(string email);
+        Task AddAsync(User user);
     }
 }

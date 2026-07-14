@@ -499,3 +499,7 @@ appsettings.Development.json
 appsettings.Local.json
 *.env
 secrets.json
+
+# Local NuGet / CLI cache (machine-specific)
+discord-backend/.nuget/
+discord-backend/.dotnet/
