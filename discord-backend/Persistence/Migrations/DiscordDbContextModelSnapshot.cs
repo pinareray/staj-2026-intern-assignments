@@ -46,6 +46,35 @@ namespace Persistence.Migrations
                     b.ToTable("Channels");
                 });
 
+            modelBuilder.Entity("Domain.Entities.Friendship", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AddresseeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RequesterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AddresseeId");
+
+                    b.HasIndex("RequesterId", "AddresseeId")
+                        .IsUnique();
+
+                    b.ToTable("Friendships");
+                });
+
             modelBuilder.Entity("Domain.Entities.Message", b =>
                 {
                     b.Property<Guid>("Id")
@@ -171,6 +200,21 @@ namespace Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("ServerId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Domain.Entities.Friendship", b =>
+                {
+                    b.HasOne("Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("AddresseeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("RequesterId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

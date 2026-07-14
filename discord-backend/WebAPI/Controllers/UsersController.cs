@@ -1,9 +1,11 @@
 using Application.Features.Users.Commands.ChangePassword;
 using Application.Features.Users.Commands.UpdateProfile;
 using Application.Features.Users.Queries.GetProfile;
+using Application.Features.Users.Queries.GetUserByUsername;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System;
 using System.Threading.Tasks;
 
 namespace WebAPI.Controllers
@@ -25,6 +27,23 @@ namespace WebAPI.Controllers
         {
             var profile = await _mediator.Send(new GetProfileQuery());
             return Ok(profile);
+        }
+
+        [HttpGet("{username}")]
+        public async Task<IActionResult> GetByUsername(string username)
+        {
+            try
+            {
+                var profile = await _mediator.Send(new GetUserByUsernameQuery
+                {
+                    Username = username
+                });
+                return Ok(profile);
+            }
+            catch (Exception ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
         }
 
         [HttpPut("me")]

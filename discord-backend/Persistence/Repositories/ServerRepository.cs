@@ -30,5 +30,25 @@ namespace Persistence.Repositories
                 .OrderBy(s => s.Name)
                 .ToListAsync();
         }
+
+        public async Task CreateWithOwnerAsync(Server server, Guid ownerId)
+        {
+            await _context.Servers.AddAsync(server);
+            await _context.ServerMembers.AddAsync(new ServerMember
+            {
+                Id = Guid.NewGuid(),
+                ServerId = server.Id,
+                UserId = ownerId,
+                Role = "Owner"
+            });
+            await _context.Channels.AddAsync(new Channel
+            {
+                Id = Guid.NewGuid(),
+                Name = "genel",
+                ServerId = server.Id,
+                Type = "Text"
+            });
+            await _context.SaveChangesAsync();
+        }
     }
 }

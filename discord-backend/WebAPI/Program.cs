@@ -2,9 +2,11 @@ using Application.Features.Auth.Commands.Login;
 using Application.Interfaces;
 using Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using Persistence;
+using Persistence.Contexts;
 using System.Text;
 using WebAPI.Hubs;
 using WebAPI.Services;
@@ -66,6 +68,21 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(securityKey)),
             ClockSkew = TimeSpan.Zero
         };
+
+        // SignalR WebSocket: access_token query string üzerinden JWT alır.
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/chatHub"))
+                {
+                    context.Token = accessToken;
+                }
+                return Task.CompletedTask;
+            }
+        };
     });
 
 builder.Services.AddAuthorization();
@@ -81,6 +98,34 @@ builder.Services.AddMediatR(cfg =>
     cfg.RegisterServicesFromAssembly(typeof(LoginCommand).Assembly));
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<DiscordDbContext>();
+    try
+    {
+        db.Database.Migrate();
+    }
+    catch
+    {
+        // Bazı ortamlarda migration keşfi başarısız olabilir; tabloyu garantiye al.
+    }
+
+    db.Database.ExecuteSqlRaw("""
+        CREATE TABLE IF NOT EXISTS "Friendships" (
+            "Id" uuid NOT NULL,
+            "RequesterId" uuid NOT NULL,
+            "AddresseeId" uuid NOT NULL,
+            "Status" text NOT NULL,
+            "CreatedAt" timestamp with time zone NOT NULL,
+            CONSTRAINT "PK_Friendships" PRIMARY KEY ("Id"),
+            CONSTRAINT "FK_Friendships_Users_RequesterId" FOREIGN KEY ("RequesterId") REFERENCES "Users" ("Id") ON DELETE RESTRICT,
+            CONSTRAINT "FK_Friendships_Users_AddresseeId" FOREIGN KEY ("AddresseeId") REFERENCES "Users" ("Id") ON DELETE RESTRICT
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS "IX_Friendships_RequesterId_AddresseeId" ON "Friendships" ("RequesterId", "AddresseeId");
+        CREATE INDEX IF NOT EXISTS "IX_Friendships_AddresseeId" ON "Friendships" ("AddresseeId");
+        """);
+}
 
 if (app.Environment.IsDevelopment())
 {

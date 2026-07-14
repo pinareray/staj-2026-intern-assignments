@@ -31,6 +31,12 @@ namespace Persistence.Repositories
             return await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
         }
 
+        public async Task<User?> GetByUsernameAsync(string username)
+        {
+            return await _context.Users.FirstOrDefaultAsync(u =>
+                u.Username.ToLower() == username.ToLower());
+        }
+
         public async Task<bool> EmailExistsAsync(string email)
         {
             return await _context.Users.AnyAsync(u => u.Email == email);

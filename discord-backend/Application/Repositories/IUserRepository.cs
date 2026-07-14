@@ -13,6 +13,7 @@ namespace Application.Repositories
     {
         Task<User?> GetByEmailAsync(string email);
         Task<User?> GetByIdAsync(Guid id);
+        Task<User?> GetByUsernameAsync(string username);
         Task<bool> EmailExistsAsync(string email);
         Task AddAsync(User user);
         Task<User?> GetByResetTokenAsync(string resetToken);

@@ -125,7 +125,7 @@ export default function LoginPage() {
                 href="/forgot-password"
                 className="text-[11px] text-stone-400 hover:text-primary-container transition-colors font-hanken"
               >
-                Unuttum?
+                Şifremi Unuttum?
               </Link>
             }
           />

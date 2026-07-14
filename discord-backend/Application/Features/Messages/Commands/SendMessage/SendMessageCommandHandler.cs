@@ -11,13 +11,16 @@ namespace Application.Features.Messages.Commands.SendMessage
     public class SendMessageCommandHandler : IRequestHandler<SendMessageCommand, object>
     {
         private readonly IMessageRepository _messageRepository;
+        private readonly IUserRepository _userRepository;
         private readonly IChatNotificationService _chatNotificationService;
 
         public SendMessageCommandHandler(
             IMessageRepository messageRepository,
+            IUserRepository userRepository,
             IChatNotificationService chatNotificationService)
         {
             _messageRepository = messageRepository;
+            _userRepository = userRepository;
             _chatNotificationService = chatNotificationService;
         }
 
@@ -28,7 +31,6 @@ namespace Application.Features.Messages.Commands.SendMessage
                 throw new Exception("Mesaj içeriği boş olamaz.");
             }
 
-            // 1. Mesajı Supabase'e (Messages tablosu) kalıcı olarak yaz.
             var message = new Message
             {
                 Id = Guid.NewGuid(),
@@ -40,12 +42,13 @@ namespace Application.Features.Messages.Commands.SendMessage
 
             await _messageRepository.AddAsync(message);
 
-            // 2. Kanaldaki canlı dinleyicilere anında fırlat (SignalR).
+            var user = await _userRepository.GetByIdAsync(request.UserId);
             var payload = new
             {
                 message.Id,
                 message.Content,
                 message.UserId,
+                Username = user?.Username ?? "Kullanıcı",
                 message.ChannelId,
                 message.CreatedAt
             };
