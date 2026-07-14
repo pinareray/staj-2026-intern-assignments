@@ -23,6 +23,7 @@ namespace Persistence
             // bu işçiden yeni bir tane üret ve işlemi bitince hafızadan sil demek.
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IMessageRepository, MessageRepository>();
+            services.AddScoped<IServerRepository, ServerRepository>();
 
             return services;
         }
