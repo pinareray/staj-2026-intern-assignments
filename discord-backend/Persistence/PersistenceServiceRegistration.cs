@@ -22,6 +22,7 @@ namespace Persistence
             // AddScoped: Her gelen HTTP isteğinde (kullanıcı login tuşuna bastığında) 
             // bu işçiden yeni bir tane üret ve işlemi bitince hafızadan sil demek.
             services.AddScoped<IUserRepository, UserRepository>();
+            services.AddScoped<IMessageRepository, MessageRepository>();
 
             return services;
         }

@@ -1,5 +1,7 @@
+using Application.Features.Auth.Commands.ForgotPassword;
 using Application.Features.Auth.Commands.Login;
 using Application.Features.Auth.Commands.Register;
+using Application.Features.Auth.Commands.ResetPassword;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
@@ -13,29 +15,39 @@ namespace WebAPI.Controllers
     {
         private readonly IMediator _mediator;
 
-        // Şef Garsonu (MediatR) içeri alıyoruz.
         public AuthController(IMediator mediator)
         {
             _mediator = mediator;
         }
 
-        // React Native uygulamamızdan "Giriş Yap" butonuna basıldığında bu metot tetiklenecek.
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginCommand command)
         {
-            // İsteği al, MediatR aracılığıyla mutfağa (LoginCommandHandler) gönder.
             var token = await _mediator.Send(command);
-
-            // Mutfaktan dönen Token'ı 200 OK koduyla telefona geri yolla.
             return Ok(new { Token = token });
         }
 
-        // "Kayıt Ol" isteği: yeni kullanıcı oluşturur ve JWT döner.
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterCommand command)
         {
             var token = await _mediator.Send(command);
             return Ok(new { Token = token });
+        }
+
+        // Şifremi unuttum: reset token üretir (MVP'de yanıtta döner).
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordCommand command)
+        {
+            var resetToken = await _mediator.Send(command);
+            return Ok(new { ResetToken = resetToken });
+        }
+
+        // Token + yeni şifre ile hesap şifresini günceller.
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordCommand command)
+        {
+            await _mediator.Send(command);
+            return Ok(new { Message = "Şifre başarıyla güncellendi." });
         }
     }
 }

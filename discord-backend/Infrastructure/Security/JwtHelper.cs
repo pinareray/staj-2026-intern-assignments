@@ -34,16 +34,22 @@ namespace Infrastructure.Security
             // 2. Güvenlik Anahtarı (Token'ı kimse sahtesiyle değiştiremesin diye).
             var securityKey = _configuration["TokenOptions:SecurityKey"]
                 ?? throw new InvalidOperationException("TokenOptions:SecurityKey yapılandırması eksik.");
+
+            if (Encoding.UTF8.GetByteCount(securityKey) < 64)
+            {
+                throw new InvalidOperationException(
+                    "TokenOptions:SecurityKey en az 64 karakter olmalı (HMAC-SHA512 gereksinimi).");
+            }
+
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(securityKey));
-            
-            // 3. Şifreleme Algoritması (HMAC SHA-512 endüstri standartıdır).
             var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha512Signature);
 
-            // 4. Token'ın özelliklerini belirliyoruz (Kim üretti, ne zaman bitecek).
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = new ClaimsIdentity(claims),
-                Expires = DateTime.UtcNow.AddDays(7), // Token 7 gün geçerli olsun
+                Expires = DateTime.UtcNow.AddDays(7),
+                Issuer = _configuration["TokenOptions:Issuer"],
+                Audience = _configuration["TokenOptions:Audience"],
                 SigningCredentials = credentials
             };
 
