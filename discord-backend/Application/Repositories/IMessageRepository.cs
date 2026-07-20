@@ -9,5 +9,6 @@ namespace Application.Repositories
     {
         Task AddAsync(Message message);
         Task<List<Message>> GetByChannelIdAsync(Guid channelId);
+        Task<Message?> GetLatestByChannelIdAsync(Guid channelId);
     }
 }

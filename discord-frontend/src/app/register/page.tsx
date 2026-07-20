@@ -22,11 +22,13 @@ export default function RegisterPage() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [touched, setTouched] = useState({
     username: false,
     email: false,
+    confirmPassword: false,
   });
 
   const usernameError = useMemo(
@@ -37,18 +39,34 @@ export default function RegisterPage() {
     () => (touched.email ? validateEmail(email) : null),
     [email, touched.email]
   );
+  const confirmPasswordError = useMemo(() => {
+    if (!touched.confirmPassword) return null;
+    if (!confirmPassword) return "Şifre tekrarını gir.";
+    if (password !== confirmPassword) return "Şifreler eşleşmiyor.";
+    return null;
+  }, [confirmPassword, password, touched.confirmPassword]);
+
+  const passwordsMatch =
+    password.length > 0 &&
+    confirmPassword.length > 0 &&
+    password === confirmPassword;
 
   const canSubmit =
     !validateUsername(username) &&
     !validateEmail(email) &&
-    isPasswordValid(password);
+    isPasswordValid(password) &&
+    passwordsMatch;
 
   const handleRegister = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
-    setTouched({ username: true, email: true });
+    setTouched({ username: true, email: true, confirmPassword: true });
 
     if (!canSubmit) {
+      if (password !== confirmPassword) {
+        setError("Şifreler eşleşmiyor.");
+        return;
+      }
       setError("Lütfen tüm alanları kurallara uygun doldur.");
       return;
     }
@@ -149,6 +167,31 @@ export default function RegisterPage() {
               disabled={loading}
             />
             <PasswordRequirements password={password} />
+          </div>
+
+          <div className="space-y-2">
+            <AuthField
+              id="confirmPassword"
+              label="Şifre Tekrar"
+              type="password"
+              autoComplete="new-password"
+              placeholder="••••••••"
+              value={confirmPassword}
+              onChange={(e) => {
+                setConfirmPassword(e.target.value);
+                setTouched((t) => ({ ...t, confirmPassword: true }));
+              }}
+              disabled={loading}
+              error={confirmPasswordError}
+            />
+            {passwordsMatch && (
+              <p className="flex items-center gap-1.5 font-hanken text-xs text-emerald-700">
+                <span className="material-symbols-outlined text-sm">
+                  check_circle
+                </span>
+                Şifreler eşleşiyor
+              </p>
+            )}
           </div>
 
           {error && (

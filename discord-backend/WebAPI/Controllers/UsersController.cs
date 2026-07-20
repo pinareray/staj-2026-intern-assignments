@@ -2,6 +2,7 @@ using Application.Features.Users.Commands.ChangePassword;
 using Application.Features.Users.Commands.UpdateProfile;
 using Application.Features.Users.Queries.GetProfile;
 using Application.Features.Users.Queries.GetUserByUsername;
+using Application.Features.Users.Queries.SearchUsers;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -27,6 +28,21 @@ namespace WebAPI.Controllers
         {
             var profile = await _mediator.Send(new GetProfileQuery());
             return Ok(profile);
+        }
+
+        [HttpGet("search")]
+        public async Task<IActionResult> Search([FromQuery] string q)
+        {
+            if (string.IsNullOrWhiteSpace(q) || q.Trim().Length < 2)
+            {
+                return Ok(Array.Empty<object>());
+            }
+
+            var results = await _mediator.Send(new SearchUsersQuery
+            {
+                Query = q
+            });
+            return Ok(results);
         }
 
         [HttpGet("{username}")]

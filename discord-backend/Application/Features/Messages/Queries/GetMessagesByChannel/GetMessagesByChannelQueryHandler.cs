@@ -1,7 +1,8 @@
+using Application.Interfaces;
 using Application.Repositories;
 using MediatR;
+using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -12,19 +13,46 @@ namespace Application.Features.Messages.Queries.GetMessagesByChannel
     {
         private readonly IMessageRepository _messageRepository;
         private readonly IUserRepository _userRepository;
+        private readonly IChannelRepository _channelRepository;
+        private readonly IChannelMemberRepository _channelMemberRepository;
+        private readonly IUserContextService _userContextService;
 
         public GetMessagesByChannelQueryHandler(
             IMessageRepository messageRepository,
-            IUserRepository userRepository)
+            IUserRepository userRepository,
+            IChannelRepository channelRepository,
+            IChannelMemberRepository channelMemberRepository,
+            IUserContextService userContextService)
         {
             _messageRepository = messageRepository;
             _userRepository = userRepository;
+            _channelRepository = channelRepository;
+            _channelMemberRepository = channelMemberRepository;
+            _userContextService = userContextService;
         }
 
         public async Task<List<MessageDto>> Handle(
             GetMessagesByChannelQuery request,
             CancellationToken cancellationToken)
         {
+            var channel = await _channelRepository.GetByIdAsync(request.ChannelId);
+            if (channel == null)
+            {
+                throw new Exception("Kanal bulunamadı.");
+            }
+
+            if (channel.Type == "DM")
+            {
+                var currentUserId = _userContextService.GetCurrentUserId();
+                var isMember = await _channelMemberRepository.IsMemberAsync(
+                    request.ChannelId,
+                    currentUserId);
+                if (!isMember)
+                {
+                    throw new Exception("Bu DM kanalına erişim yetkiniz yok.");
+                }
+            }
+
             var messages = await _messageRepository.GetByChannelIdAsync(request.ChannelId);
             var result = new List<MessageDto>();
 

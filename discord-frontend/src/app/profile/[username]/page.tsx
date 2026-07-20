@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { API_BASE_URL, logoutToLanding } from "@/lib/api";
 
 type PublicProfile = {
   id: string;
@@ -35,7 +36,7 @@ export default function ProfilePage() {
 
       try {
         const response = await fetch(
-          `http://localhost:5243/api/users/${encodeURIComponent(usernameParam)}`,
+          `${API_BASE_URL}/api/users/${encodeURIComponent(usernameParam)}`,
           {
             headers: { Authorization: `Bearer ${token}` },
           }
@@ -51,8 +52,7 @@ export default function ProfilePage() {
           const data = await response.json().catch(() => ({}));
           setError(
             String(
-              (data as { message?: string }).message ??
-                "Profil bulunamadı."
+              (data as { message?: string }).message ?? "Profil bulunamadı."
             )
           );
           setProfile(null);
@@ -64,7 +64,9 @@ export default function ProfilePage() {
           id: String(data.id ?? data.Id),
           username: String(data.username ?? data.Username ?? usernameParam),
           createdAt: String(data.createdAt ?? data.CreatedAt ?? ""),
-          avatarUrl: (data.avatarUrl ?? data.AvatarUrl ?? null) as string | null,
+          avatarUrl: (data.avatarUrl ?? data.AvatarUrl ?? null) as
+            | string
+            | null,
         });
       } catch {
         setError("Sunucuya bağlanılamadı.");
@@ -88,116 +90,148 @@ export default function ProfilePage() {
   })();
 
   return (
-    <main className="min-h-screen relative overflow-hidden bg-[#1c1c16] text-[#e6e2d9]">
-      <div
-        className="pointer-events-none absolute inset-0 opacity-80"
-        style={{
-          background:
-            "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(173,40,49,0.35), transparent 55%), radial-gradient(ellipse 60% 40% at 80% 80%, rgba(89,65,64,0.25), transparent 50%)",
-        }}
-      />
-
-      <div className="relative z-10 max-w-lg mx-auto px-6 py-10 min-h-screen flex flex-col">
-        <div className="flex items-center justify-between mb-10">
-          <Link
-            href="/"
-            className="flex items-center gap-2 text-[#e1bfbd]/80 hover:text-[#e6e2d9] transition-colors font-hanken text-sm"
-          >
-            <span className="material-symbols-outlined text-lg">arrow_back</span>
-            Sohbete dön
-          </Link>
-          <span className="font-libre text-xl tracking-tight text-primary-container">
-            micodex
+    <div className="flex min-h-screen flex-col bg-background text-on-surface">
+      <header className="relative z-20 flex h-14 shrink-0 items-center justify-between border-b border-outline-variant/60 bg-surface/80 px-4 backdrop-blur-sm sm:h-16 sm:px-6">
+        <Link
+          href="/app"
+          className="inline-flex items-center gap-2 font-hanken text-sm text-on-surface-variant transition-colors hover:text-on-surface"
+        >
+          <span className="material-symbols-outlined text-lg" aria-hidden>
+            arrow_back
           </span>
-        </div>
+          Sohbete Dön
+        </Link>
+        <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-libre text-lg tracking-tight text-primary-container sm:text-xl">
+          micodex
+        </span>
+        <button
+          type="button"
+          onClick={() => logoutToLanding()}
+          className="inline-flex items-center gap-1.5 font-hanken text-sm text-on-surface-variant transition-colors hover:text-primary-container"
+        >
+          <span className="material-symbols-outlined text-lg" aria-hidden>
+            logout
+          </span>
+          <span className="hidden sm:inline">Çıkış Yap</span>
+        </button>
+      </header>
 
-        <div className="flex-1 flex items-center justify-center">
-          {loading && (
-            <p className="text-sm text-[#e1bfbd]/70 font-hanken">
-              Profil yükleniyor...
-            </p>
-          )}
+      <main className="relative flex flex-1 flex-col items-center justify-center px-4 py-10 sm:px-6 sm:py-14">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-70"
+          style={{
+            background:
+              "radial-gradient(ellipse 70% 45% at 50% 0%, rgba(173,40,49,0.12), transparent 55%)",
+          }}
+        />
 
-          {!loading && error && (
-            <div className="w-full rounded-2xl border border-[#ad2831]/40 bg-[#250902]/80 p-8 text-center space-y-4">
-              <span className="material-symbols-outlined text-4xl text-[#ad2831]">
-                person_off
-              </span>
-              <p className="font-hanken text-[#e1bfbd]">{error}</p>
-              <Link
-                href="/"
-                className="inline-block text-sm text-primary-container hover:underline font-hanken"
-              >
-                Ana sayfaya git
-              </Link>
-            </div>
-          )}
+        {loading && (
+          <p className="relative z-10 font-hanken text-sm text-on-surface-variant">
+            Profil yükleniyor...
+          </p>
+        )}
 
-          {!loading && profile && (
-            <article className="w-full rounded-2xl border border-[#594140]/40 bg-[#250902]/90 shadow-2xl overflow-hidden">
-              <div className="h-28 bg-gradient-to-br from-primary-container via-[#8f1b1c] to-[#250902]" />
+        {!loading && error && (
+          <div
+            className="relative z-10 rounded-2xl border border-red-200 bg-surface p-8 text-center shadow-xl"
+            style={{ width: "min(100%, 420px)" }}
+          >
+            <span className="material-symbols-outlined text-4xl text-primary-container">
+              person_off
+            </span>
+            <p className="mt-3 font-hanken text-on-surface-variant">{error}</p>
+            <Link
+              href="/app"
+              className="mt-4 inline-block font-hanken text-sm text-primary-container hover:underline"
+            >
+              Sohbete dön
+            </Link>
+          </div>
+        )}
 
-              <div className="px-8 pb-8 -mt-12 space-y-6">
-                <div className="flex flex-col items-center text-center space-y-3">
-                  {profile.avatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={profile.avatarUrl}
-                      alt={profile.username}
-                      className="w-24 h-24 rounded-full border-4 border-[#250902] object-cover shadow-lg"
-                    />
-                  ) : (
-                    <div className="w-24 h-24 rounded-full border-4 border-[#250902] bg-[#1c1c16] flex items-center justify-center shadow-lg">
-                      <span className="font-libre text-4xl text-primary-container font-bold uppercase">
-                        {profile.username.charAt(0)}
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="space-y-1">
-                    <h1 className="font-libre text-3xl text-[#e6e2d9] tracking-tight">
-                      {profile.username}
-                    </h1>
-                    <p className="text-xs uppercase tracking-[0.2em] text-[#e1bfbd]/60 font-hanken">
-                      MiCodex üyesi
-                    </p>
-                  </div>
+        {!loading && profile && (
+          <article
+            className="relative z-10 rounded-2xl border border-outline-variant bg-surface shadow-xl"
+            style={{ width: "min(100%, 420px)", padding: "32px" }}
+          >
+            <div className="flex flex-col items-center text-center">
+              {profile.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={profile.avatarUrl}
+                  alt={profile.username}
+                  className="rounded-full border-4 border-surface-container-high object-cover shadow-md"
+                  style={{ width: 112, height: 112 }}
+                />
+              ) : (
+                <div
+                  className="flex items-center justify-center rounded-full border-4 border-surface-container-high bg-primary-container/10 shadow-md"
+                  style={{ width: 112, height: 112 }}
+                >
+                  <span className="font-libre text-4xl font-bold uppercase text-primary-container">
+                    {profile.username.charAt(0)}
+                  </span>
                 </div>
+              )}
 
-                <div className="grid gap-3">
-                  <div className="rounded-xl bg-[#1c1c16]/80 border border-[#594140]/30 px-5 py-4 flex items-center gap-4">
-                    <span className="material-symbols-outlined text-primary-container">
-                      calendar_month
-                    </span>
-                    <div className="text-left min-w-0">
-                      <p className="text-[10px] uppercase tracking-widest text-[#e1bfbd]/50 font-hanken">
-                        Katılım tarihi
-                      </p>
-                      <p className="text-sm text-[#e6e2d9] font-hanken">
-                        {joinedLabel}
-                      </p>
-                    </div>
-                  </div>
+              <h1 className="mt-5 font-libre text-2xl tracking-tight text-on-surface sm:text-3xl">
+                @{profile.username}
+              </h1>
+              <p className="mt-1 font-hanken text-xs uppercase tracking-[0.18em] text-on-surface-variant">
+                MiCodex üyesi
+              </p>
+            </div>
 
-                  <div className="rounded-xl bg-[#1c1c16]/80 border border-[#594140]/30 px-5 py-4 flex items-center gap-4">
-                    <span className="material-symbols-outlined text-primary-container">
-                      badge
-                    </span>
-                    <div className="text-left min-w-0">
-                      <p className="text-[10px] uppercase tracking-widest text-[#e1bfbd]/50 font-hanken">
-                        Kullanıcı adı
-                      </p>
-                      <p className="text-sm text-[#e6e2d9] font-hanken truncate">
-                        @{profile.username}
-                      </p>
-                    </div>
-                  </div>
+            <div className="mt-8 space-y-3">
+              <div
+                className="flex items-start gap-3 rounded-xl bg-surface-container-low text-left"
+                style={{ padding: "14px 16px" }}
+              >
+                <span className="material-symbols-outlined mt-0.5 shrink-0 text-primary-container">
+                  calendar_month
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-hanken text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                    MiCodex&apos;e katılım tarihi
+                  </p>
+                  <p className="mt-0.5 font-hanken text-sm text-on-surface">
+                    {joinedLabel}
+                  </p>
                 </div>
               </div>
-            </article>
-          )}
-        </div>
-      </div>
-    </main>
+
+              <div
+                className="flex items-start gap-3 rounded-xl bg-surface-container-low text-left"
+                style={{ padding: "14px 16px" }}
+              >
+                <span className="material-symbols-outlined mt-0.5 shrink-0 text-primary-container">
+                  info
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-hanken text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                    Hakkında
+                  </p>
+                  <p className="mt-0.5 font-hanken text-sm text-on-surface-variant">
+                    Bu kullanıcı henüz bir biyografi eklemedi.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => logoutToLanding()}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-primary-container/30 bg-primary-container/5 font-hanken text-sm font-semibold text-primary-container transition-colors hover:bg-primary-container hover:text-on-primary"
+                style={{ padding: "12px 16px" }}
+              >
+                <span className="material-symbols-outlined text-lg" aria-hidden>
+                  logout
+                </span>
+                Çıkış Yap
+              </button>
+            </div>
+          </article>
+        )}
+      </main>
+    </div>
   );
 }

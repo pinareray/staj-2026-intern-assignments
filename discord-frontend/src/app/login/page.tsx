@@ -71,7 +71,7 @@ export default function LoginPage() {
       }
 
       localStorage.setItem("token", token);
-      router.push("/");
+      router.push("/app");
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         setError(

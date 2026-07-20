@@ -1,5 +1,6 @@
 using Application.Features.Auth.Commands.Login;
 using Application.Interfaces;
+using Application.Services;
 using Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -93,6 +94,7 @@ builder.Services.AddPersistenceServices(builder.Configuration);
 builder.Services.AddInfrastructureServices();
 builder.Services.AddScoped<IChatNotificationService, ChatNotificationService>();
 builder.Services.AddScoped<IUserContextService, UserContextService>();
+builder.Services.AddScoped<IDmChannelService, DmChannelService>();
 
 builder.Services.AddMediatR(cfg =>
     cfg.RegisterServicesFromAssembly(typeof(LoginCommand).Assembly));
@@ -124,6 +126,19 @@ using (var scope = app.Services.CreateScope())
         );
         CREATE UNIQUE INDEX IF NOT EXISTS "IX_Friendships_RequesterId_AddresseeId" ON "Friendships" ("RequesterId", "AddresseeId");
         CREATE INDEX IF NOT EXISTS "IX_Friendships_AddresseeId" ON "Friendships" ("AddresseeId");
+
+        ALTER TABLE "Channels" ALTER COLUMN "ServerId" DROP NOT NULL;
+
+        CREATE TABLE IF NOT EXISTS "ChannelMembers" (
+            "Id" uuid NOT NULL,
+            "ChannelId" uuid NOT NULL,
+            "UserId" uuid NOT NULL,
+            CONSTRAINT "PK_ChannelMembers" PRIMARY KEY ("Id"),
+            CONSTRAINT "FK_ChannelMembers_Channels_ChannelId" FOREIGN KEY ("ChannelId") REFERENCES "Channels" ("Id") ON DELETE CASCADE,
+            CONSTRAINT "FK_ChannelMembers_Users_UserId" FOREIGN KEY ("UserId") REFERENCES "Users" ("Id") ON DELETE CASCADE
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS "IX_ChannelMembers_ChannelId_UserId" ON "ChannelMembers" ("ChannelId", "UserId");
+        CREATE INDEX IF NOT EXISTS "IX_ChannelMembers_UserId" ON "ChannelMembers" ("UserId");
         """);
 }
 

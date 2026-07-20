@@ -12,15 +12,21 @@ namespace Application.Features.Messages.Commands.SendMessage
     {
         private readonly IMessageRepository _messageRepository;
         private readonly IUserRepository _userRepository;
+        private readonly IChannelRepository _channelRepository;
+        private readonly IChannelMemberRepository _channelMemberRepository;
         private readonly IChatNotificationService _chatNotificationService;
 
         public SendMessageCommandHandler(
             IMessageRepository messageRepository,
             IUserRepository userRepository,
+            IChannelRepository channelRepository,
+            IChannelMemberRepository channelMemberRepository,
             IChatNotificationService chatNotificationService)
         {
             _messageRepository = messageRepository;
             _userRepository = userRepository;
+            _channelRepository = channelRepository;
+            _channelMemberRepository = channelMemberRepository;
             _chatNotificationService = chatNotificationService;
         }
 
@@ -29,6 +35,23 @@ namespace Application.Features.Messages.Commands.SendMessage
             if (string.IsNullOrWhiteSpace(request.Content))
             {
                 throw new Exception("Mesaj içeriği boş olamaz.");
+            }
+
+            var channel = await _channelRepository.GetByIdAsync(request.ChannelId);
+            if (channel == null)
+            {
+                throw new Exception("Kanal bulunamadı.");
+            }
+
+            if (channel.Type == "DM")
+            {
+                var isMember = await _channelMemberRepository.IsMemberAsync(
+                    request.ChannelId,
+                    request.UserId);
+                if (!isMember)
+                {
+                    throw new Exception("Bu DM kanalına mesaj gönderme yetkiniz yok.");
+                }
             }
 
             var message = new Message

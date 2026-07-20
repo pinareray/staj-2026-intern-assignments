@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import {
   HubConnection,
   HubConnectionBuilder,
+  HubConnectionState,
   LogLevel,
 } from "@microsoft/signalr";
 import FriendsList from "@/components/FriendsList";
@@ -21,6 +22,9 @@ type ChatAreaProps = {
   hasServer?: boolean;
   channelsReady?: boolean;
   channelsEmpty?: boolean;
+  isDmMode?: boolean;
+  onOpenDm?: (channel: ChannelItem) => void;
+  onDmAccepted?: () => void;
 };
 
 function mapMessage(
@@ -44,6 +48,9 @@ export default function ChatArea({
   hasServer = false,
   channelsReady = false,
   channelsEmpty = false,
+  isDmMode = false,
+  onOpenDm,
+  onDmAccepted,
 }: ChatAreaProps) {
   const router = useRouter();
   const selectedChannelId = selectedChannel?.id ?? null;
@@ -163,9 +170,14 @@ export default function ChatArea({
       if (!connection) return;
 
       // Bağlantı henüz kurulmadıysa kısa bekleyip tekrar dene
-      if (connection.state !== "Connected") {
+      if ((connection.state as HubConnectionState) !== HubConnectionState.Connected) {
         await new Promise((r) => setTimeout(r, 400));
-        if (cancelled || connection.state !== "Connected") return;
+        if (
+          cancelled ||
+          (connection.state as HubConnectionState) !== HubConnectionState.Connected
+        ) {
+          return;
+        }
       }
 
       const previous = joinedChannelRef.current;
@@ -304,7 +316,10 @@ export default function ChatArea({
       setDraft("");
 
       const connection = connectionRef.current;
-      if (connection?.state === "Connected") {
+      if (
+        connection &&
+        (connection.state as HubConnectionState) === HubConnectionState.Connected
+      ) {
         try {
           await connection.invoke("SendMessage", selectedChannelId, created);
         } catch {
@@ -332,31 +347,40 @@ export default function ChatArea({
 
   return (
     <main className="flex-1 flex flex-col overflow-hidden relative bg-background">
-      <header className="h-16 px-6 flex items-center justify-between border-b border-stone-200 z-10 bg-white/80 backdrop-blur-md">
+      <header className="h-16 px-6 flex items-center justify-between border-b border-stone-200 z-10 bg-white">
         <div className="flex items-center gap-3">
           <span
             className="material-symbols-outlined text-primary-container"
             style={{ fontVariationSettings: "'FILL' 1" }}
           >
-            tag
+            {isDmMode || selectedChannel?.type === "DM" ? "alternate_email" : "tag"}
           </span>
           <div>
             <h2 className="font-libre text-lg text-stone-900">
-              {selectedChannel?.name ??
-                (hasServer && !channelsReady
-                  ? "Kanallar yükleniyor..."
-                  : hasServer && channelsEmpty
-                    ? "Kanal oluşturarak ilk adımı atın"
-                    : "Bir kanal seçerek sohbete başlayın")}
+              {selectedChannel?.name
+                ? selectedChannel.type === "DM"
+                  ? `@${selectedChannel.name}`
+                  : selectedChannel.name
+                : isDmMode
+                  ? "Bir sohbet seç"
+                  : hasServer && !channelsReady
+                    ? "Kanallar yükleniyor..."
+                    : hasServer && channelsEmpty
+                      ? "Kanal oluşturarak ilk adımı atın"
+                      : "Bir kanal seçerek sohbete başlayın"}
             </h2>
             <p className="text-xs text-stone-400 font-hanken">
               {selectedChannel
-                ? `#${selectedChannel.name} sohbet kanalı`
-                : hasServer && !channelsReady
-                  ? "Biraz bekleyin"
-                  : hasServer && channelsEmpty
-                    ? "Soldan “Kanal Oluştur” ile yeni bir alan açabilirsin"
-                    : "Önce bir sunucu seç, sonra kanal oluştur veya seç"}
+                ? selectedChannel.type === "DM"
+                  ? "Özel mesaj"
+                  : `#${selectedChannel.name} sohbet kanalı`
+                : isDmMode
+                  ? "Soldan bir arkadaş sohbeti seç"
+                  : hasServer && !channelsReady
+                    ? "Biraz bekleyin"
+                    : hasServer && channelsEmpty
+                      ? "Soldan “Kanal Oluştur” ile yeni bir alan açabilirsin"
+                      : "Önce bir sunucu seç, sonra kanal oluştur veya seç"}
             </p>
           </div>
         </div>
@@ -400,20 +424,27 @@ export default function ChatArea({
       </header>
 
       <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-8 inner-depth space-y-6 bg-gradient-to-br from-white to-[#f7f4ef]">
-        {!selectedChannel && hasServer && !channelsReady && (
+        {!selectedChannel && isDmMode && (
+          <p className="text-center text-sm text-stone-400 font-hanken pt-10 w-full max-w-md mx-auto leading-relaxed">
+            Soldan bir arkadaş sohbeti seç — ya da Arkadaşlar listesinden Mesaj
+            ile yeni bir konuşma başlat.
+          </p>
+        )}
+
+        {!selectedChannel && !isDmMode && hasServer && !channelsReady && (
           <p className="text-center text-sm text-stone-400 font-hanken pt-10 w-full">
             Kanallar yükleniyor...
           </p>
         )}
 
-        {!selectedChannel && hasServer && channelsReady && channelsEmpty && (
+        {!selectedChannel && !isDmMode && hasServer && channelsReady && channelsEmpty && (
           <p className="text-center text-sm text-stone-400 font-hanken pt-10 w-full max-w-md mx-auto leading-relaxed">
             Henüz bir kanal yok gibi görünüyor. Sol panilden “Kanal Oluştur” ile
             ilk adımı at.
           </p>
         )}
 
-        {!selectedChannel && !hasServer && (
+        {!selectedChannel && !isDmMode && !hasServer && (
           <p className="text-center text-sm text-stone-400 font-hanken pt-10 w-full max-w-md mx-auto leading-relaxed">
             Bir kanal seçerek sohbete başlayın — ya da yeni bir kanal oluşturarak
             arşivi şekillendirin.
@@ -526,8 +557,12 @@ export default function ChatArea({
               className="w-full bg-transparent border-none focus:ring-0 text-stone-900 placeholder:text-stone-400 py-2 custom-scrollbar resize-none max-h-32 text-sm outline-none font-hanken"
               placeholder={
                 selectedChannel
-                  ? `#${selectedChannel.name} kanalına bir mesaj yaz...`
-                  : "Önce bir kanal seç..."
+                  ? selectedChannel.type === "DM"
+                    ? `@${selectedChannel.name} kullanıcısına mesaj yaz...`
+                    : `#${selectedChannel.name} kanalına bir mesaj yaz...`
+                  : isDmMode
+                    ? "Önce bir sohbet seç..."
+                    : "Önce bir kanal seç..."
               }
               rows={1}
               disabled={!selectedChannel || sending}
@@ -551,7 +586,12 @@ export default function ChatArea({
         </form>
       </footer>
 
-      <FriendsList isOpen={friendsOpen} onClose={() => setFriendsOpen(false)} />
+      <FriendsList
+        isOpen={friendsOpen}
+        onClose={() => setFriendsOpen(false)}
+        onOpenDm={onOpenDm}
+        onDmAccepted={onDmAccepted}
+      />
     </main>
   );
 }

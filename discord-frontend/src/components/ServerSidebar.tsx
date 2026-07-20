@@ -7,11 +7,15 @@ import type { ServerItem } from "@/types/chat";
 
 type ServerSidebarProps = {
   currentServerId: string | null;
+  messagesActive?: boolean;
+  onMessagesHome?: () => void;
   onServerSelect: (server: ServerItem) => void;
 };
 
 export default function ServerSidebar({
   currentServerId,
+  messagesActive = false,
+  onMessagesHome,
   onServerSelect,
 }: ServerSidebarProps) {
   const router = useRouter();
@@ -52,13 +56,13 @@ export default function ServerSidebar({
 
       setServers(mapped);
 
-      if (!currentServerId && mapped.length > 0) {
+      if (!messagesActive && !currentServerId && mapped.length > 0) {
         onServerSelect(mapped[0]);
       }
     } catch {
       router.push("/login");
     }
-  }, [router, currentServerId, onServerSelect]);
+  }, [router, currentServerId, onServerSelect, messagesActive]);
 
   useEffect(() => {
     loadServers();
@@ -71,19 +75,37 @@ export default function ServerSidebar({
   return (
     <>
       <aside className="w-20 flex flex-col items-center py-6 space-y-6 border-r border-stone-200 bg-mahogany-dark shrink-0">
-        <div className="relative group cursor-pointer" title="micodex">
-          <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-primary-container p-0.5 transition-transform duration-300 group-hover:scale-110 bg-white flex items-center justify-center">
-            <span className="font-libre text-lg text-primary-container font-bold leading-none">
-              m
-            </span>
-          </div>
-        </div>
+        <button
+          type="button"
+          title="Mesajlar"
+          onClick={() => onMessagesHome?.()}
+          className={`w-12 h-12 rounded-2xl border-2 flex items-center justify-center cursor-pointer transition-all duration-300 hover:rounded-xl shadow-sm bg-white ${
+            messagesActive
+              ? "border-white ring-2 ring-white/80 rounded-xl scale-105"
+              : "border-stone-200 hover:bg-primary-container/10"
+          }`}
+        >
+          <span
+            className={`material-symbols-outlined text-xl ${
+              messagesActive
+                ? "text-primary-container"
+                : "text-stone-500 group-hover:text-primary-container"
+            }`}
+            style={
+              messagesActive
+                ? { fontVariationSettings: "'FILL' 1" }
+                : undefined
+            }
+          >
+            forum
+          </span>
+        </button>
 
         <div className="w-10 h-px bg-stone-300 mx-auto" />
 
         <div className="space-y-4">
           {servers.map((server) => {
-            const isActive = currentServerId === server.id;
+            const isActive = !messagesActive && currentServerId === server.id;
             return (
               <button
                 type="button"

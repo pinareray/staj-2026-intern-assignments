@@ -11,13 +11,16 @@ namespace Application.Features.Friends.Commands.AcceptRequest
     {
         private readonly IFriendshipRepository _friendshipRepository;
         private readonly IUserContextService _userContextService;
+        private readonly IDmChannelService _dmChannelService;
 
         public AcceptRequestCommandHandler(
             IFriendshipRepository friendshipRepository,
-            IUserContextService userContextService)
+            IUserContextService userContextService,
+            IDmChannelService dmChannelService)
         {
             _friendshipRepository = friendshipRepository;
             _userContextService = userContextService;
+            _dmChannelService = dmChannelService;
         }
 
         public async Task<object> Handle(AcceptRequestCommand request, CancellationToken cancellationToken)
@@ -43,12 +46,19 @@ namespace Application.Features.Friends.Commands.AcceptRequest
             friendship.Status = "Accepted";
             await _friendshipRepository.UpdateAsync(friendship);
 
+            var dmChannel = await _dmChannelService.FindOrCreateDmAsync(
+                friendship.RequesterId,
+                friendship.AddresseeId,
+                seedGreeting: true,
+                greetingFromUserId: currentUserId);
+
             return new
             {
                 friendship.Id,
                 friendship.RequesterId,
                 friendship.AddresseeId,
-                friendship.Status
+                friendship.Status,
+                DmChannelId = dmChannel.Id
             };
         }
     }

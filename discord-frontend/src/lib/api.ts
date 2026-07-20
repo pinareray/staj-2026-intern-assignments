@@ -5,9 +5,21 @@ export function getAuthToken(): string | null {
   return localStorage.getItem("token");
 }
 
-export function clearAuthAndRedirectToLogin() {
+export function clearAuthStorage() {
   if (typeof window === "undefined") return;
   localStorage.removeItem("token");
+  localStorage.removeItem("username");
+  localStorage.removeItem("email");
+  localStorage.removeItem("userId");
+}
+
+export function logoutToLanding() {
+  clearAuthStorage();
+  window.location.href = "/";
+}
+
+export function clearAuthAndRedirectToLogin() {
+  clearAuthStorage();
   window.location.href = "/login";
 }
 

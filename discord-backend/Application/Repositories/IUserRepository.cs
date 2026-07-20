@@ -1,4 +1,6 @@
 using Domain.Entities;
+using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 //Çekirdeğimizi oluşturduk. Şimdi Application katmanına geçiyoruz. Bu katman, "sistemimizin ne yapabildiğini" 
@@ -14,6 +16,7 @@ namespace Application.Repositories
         Task<User?> GetByEmailAsync(string email);
         Task<User?> GetByIdAsync(Guid id);
         Task<User?> GetByUsernameAsync(string username);
+        Task<List<User>> SearchByUsernameAsync(string query, Guid? excludeUserId, int limit = 10);
         Task<bool> EmailExistsAsync(string email);
         Task AddAsync(User user);
         Task<User?> GetByResetTokenAsync(string resetToken);

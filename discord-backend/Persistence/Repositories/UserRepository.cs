@@ -2,27 +2,24 @@ using Application.Repositories;
 using Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Persistence.Contexts;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace Persistence.Repositories
 {
-    // UserRepository sınıfı, IUserRepository sözleşmesini (interface) "implements" eder (uygular).
-    // Yani "O sözleşmedeki şartları ben yerine getireceğim" der.
     public class UserRepository : IUserRepository
     {
         private readonly DiscordDbContext _context;
 
-        // İşçimiz, veri tabanına ulaşabilmek için az önce yazdığımız köprüyü (DbContext) kullanır.
         public UserRepository(DiscordDbContext context)
         {
             _context = context;
         }
 
-        // Sözleşmedeki metodun gerçek kodlarla (SQL karşılığıyla) doldurulmuş hali.
         public async Task<User?> GetByEmailAsync(string email)
         {
-            // Entity Framework bu C# kodunu şu SQL sorgusuna çevirir:
-            // SELECT * FROM Users WHERE Email = @email LIMIT 1;
             return await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
         }
 
@@ -35,6 +32,27 @@ namespace Persistence.Repositories
         {
             return await _context.Users.FirstOrDefaultAsync(u =>
                 u.Username.ToLower() == username.ToLower());
+        }
+
+        public async Task<List<User>> SearchByUsernameAsync(string query, Guid? excludeUserId, int limit = 10)
+        {
+            var q = query.Trim().ToLower();
+            if (string.IsNullOrWhiteSpace(q))
+            {
+                return new List<User>();
+            }
+
+            var users = _context.Users.AsQueryable();
+            if (excludeUserId.HasValue)
+            {
+                users = users.Where(u => u.Id != excludeUserId.Value);
+            }
+
+            return await users
+                .Where(u => u.Username.ToLower().Contains(q))
+                .OrderBy(u => u.Username)
+                .Take(limit)
+                .ToListAsync();
         }
 
         public async Task<bool> EmailExistsAsync(string email)

@@ -30,6 +30,12 @@ namespace Persistence.Repositories
             await _context.SaveChangesAsync();
         }
 
+        public async Task DeleteAsync(Friendship friendship)
+        {
+            _context.Friendships.Remove(friendship);
+            await _context.SaveChangesAsync();
+        }
+
         public async Task<Friendship?> GetByIdAsync(Guid id)
         {
             return await _context.Friendships.FirstOrDefaultAsync(f => f.Id == id);
@@ -56,6 +62,14 @@ namespace Persistence.Repositories
         {
             return await _context.Friendships
                 .Where(f => f.Status == "Pending" && f.AddresseeId == userId)
+                .OrderByDescending(f => f.CreatedAt)
+                .ToListAsync();
+        }
+
+        public async Task<List<Friendship>> GetOutgoingPendingForUserAsync(Guid userId)
+        {
+            return await _context.Friendships
+                .Where(f => f.Status == "Pending" && f.RequesterId == userId)
                 .OrderByDescending(f => f.CreatedAt)
                 .ToListAsync();
         }

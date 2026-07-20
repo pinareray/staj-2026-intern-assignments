@@ -43,8 +43,8 @@ namespace Application.Features.Friends.Queries.GetFriends
                 });
             }
 
-            var pending = await _friendshipRepository.GetPendingForUserAsync(currentUserId);
-            foreach (var f in pending)
+            var pendingIncoming = await _friendshipRepository.GetPendingForUserAsync(currentUserId);
+            foreach (var f in pendingIncoming)
             {
                 var user = await _userRepository.GetByIdAsync(f.RequesterId);
                 result.Add(new FriendDto
@@ -54,6 +54,20 @@ namespace Application.Features.Friends.Queries.GetFriends
                     Username = user?.Username ?? "Kullanıcı",
                     Status = "Pending",
                     IsIncoming = true
+                });
+            }
+
+            var pendingOutgoing = await _friendshipRepository.GetOutgoingPendingForUserAsync(currentUserId);
+            foreach (var f in pendingOutgoing)
+            {
+                var user = await _userRepository.GetByIdAsync(f.AddresseeId);
+                result.Add(new FriendDto
+                {
+                    FriendshipId = f.Id,
+                    UserId = f.AddresseeId,
+                    Username = user?.Username ?? "Kullanıcı",
+                    Status = "Pending",
+                    IsIncoming = false
                 });
             }
 

@@ -25,6 +25,7 @@ namespace Persistence
             services.AddScoped<IMessageRepository, MessageRepository>();
             services.AddScoped<IServerRepository, ServerRepository>();
             services.AddScoped<IChannelRepository, ChannelRepository>();
+            services.AddScoped<IChannelMemberRepository, ChannelMemberRepository>();
             services.AddScoped<IFriendshipRepository, FriendshipRepository>();
 
             return services;

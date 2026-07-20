@@ -7,7 +7,7 @@ export type ServerItem = {
 export type ChannelItem = {
   id: string;
   name: string;
-  serverId: string;
+  serverId: string | null;
   type: string;
 };
 

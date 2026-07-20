@@ -26,13 +26,14 @@ namespace Application.Features.Friends.Commands.AddFriend
 
         public async Task<object> Handle(AddFriendCommand request, CancellationToken cancellationToken)
         {
-            if (string.IsNullOrWhiteSpace(request.Username))
+            var username = request.Username.Trim().TrimStart('@');
+            if (string.IsNullOrWhiteSpace(username))
             {
                 throw new Exception("Kullanıcı adı zorunludur.");
             }
 
             var currentUserId = _userContextService.GetCurrentUserId();
-            var target = await _userRepository.GetByUsernameAsync(request.Username.Trim());
+            var target = await _userRepository.GetByUsernameAsync(username);
 
             if (target == null)
             {

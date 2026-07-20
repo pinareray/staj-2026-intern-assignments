@@ -31,5 +31,13 @@ namespace Persistence.Repositories
                 .OrderBy(m => m.CreatedAt)
                 .ToListAsync();
         }
+
+        public async Task<Message?> GetLatestByChannelIdAsync(Guid channelId)
+        {
+            return await _context.Messages
+                .Where(m => m.ChannelId == channelId)
+                .OrderByDescending(m => m.CreatedAt)
+                .FirstOrDefaultAsync();
+        }
     }
 }
