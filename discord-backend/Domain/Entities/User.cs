@@ -19,6 +19,8 @@ namespace Domain.Entities
         public byte[] PasswordHash { get; set; }
         public byte[] PasswordSalt { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public string? Bio { get; set; }
+        public string? Status { get; set; }
 
         // Şifre sıfırlama: e-posta ile gönderilecek rastgele token ve son kullanma zamanı.
         public string? PasswordResetToken { get; set; }

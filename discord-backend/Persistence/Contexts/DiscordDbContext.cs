@@ -17,6 +17,7 @@ namespace Persistence.Contexts
         public DbSet<Message> Messages { get; set; }
         public DbSet<Friendship> Friendships { get; set; }
         public DbSet<ChannelMember> ChannelMembers { get; set; }
+        public DbSet<StarredMessage> StarredMessages { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -105,6 +106,22 @@ namespace Persistence.Contexts
                     .WithMany()
                     .HasForeignKey(f => f.AddresseeId)
                     .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<StarredMessage>(entity =>
+            {
+                entity.HasIndex(s => new { s.UserId, s.MessageId }).IsUnique();
+                entity.HasIndex(s => s.MessageId);
+
+                entity.HasOne<User>()
+                    .WithMany()
+                    .HasForeignKey(s => s.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne<Message>()
+                    .WithMany()
+                    .HasForeignKey(s => s.MessageId)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
         }
     }

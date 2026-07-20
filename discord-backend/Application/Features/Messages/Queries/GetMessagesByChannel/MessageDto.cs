@@ -10,5 +10,6 @@ namespace Application.Features.Messages.Queries.GetMessagesByChannel
         public string Username { get; set; }
         public Guid ChannelId { get; set; }
         public DateTime CreatedAt { get; set; }
+        public bool IsStarred { get; set; }
     }
 }

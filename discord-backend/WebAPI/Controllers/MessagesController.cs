@@ -1,3 +1,5 @@
+using Application.Features.Messages.Commands.StarMessage;
+using Application.Features.Messages.Commands.UnstarMessage;
 using Application.Features.Messages.Commands.SendMessage;
 using Application.Features.Messages.Queries.GetMessagesByChannel;
 using MediatR;
@@ -20,7 +22,6 @@ namespace WebAPI.Controllers
             _mediator = mediator;
         }
 
-        // GET api/messages?channelId=...
         [HttpGet]
         public async Task<IActionResult> GetByChannelQuery([FromQuery] Guid channelId)
         {
@@ -31,7 +32,6 @@ namespace WebAPI.Controllers
             return Ok(messages);
         }
 
-        // GET api/messages/{channelId}
         [HttpGet("{channelId:guid}")]
         public async Task<IActionResult> GetByChannel(Guid channelId)
         {
@@ -40,6 +40,34 @@ namespace WebAPI.Controllers
                 ChannelId = channelId
             });
             return Ok(messages);
+        }
+
+        [HttpPost("{messageId:guid}/star")]
+        public async Task<IActionResult> Star(Guid messageId)
+        {
+            try
+            {
+                var result = await _mediator.Send(new StarMessageCommand { MessageId = messageId });
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpDelete("{messageId:guid}/star")]
+        public async Task<IActionResult> Unstar(Guid messageId)
+        {
+            try
+            {
+                var result = await _mediator.Send(new UnstarMessageCommand { MessageId = messageId });
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpPost]

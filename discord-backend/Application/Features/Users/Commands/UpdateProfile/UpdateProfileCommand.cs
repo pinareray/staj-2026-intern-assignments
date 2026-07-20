@@ -6,5 +6,7 @@ namespace Application.Features.Users.Commands.UpdateProfile
     public class UpdateProfileCommand : IRequest<GetProfileResponse>
     {
         public string Username { get; set; }
+        public string? Bio { get; set; }
+        public string? Status { get; set; }
     }
 }

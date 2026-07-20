@@ -11,13 +11,19 @@ namespace Application.Features.Users.Commands.UpdateProfile
     public class UpdateProfileCommandHandler : IRequestHandler<UpdateProfileCommand, GetProfileResponse>
     {
         private readonly IUserRepository _userRepository;
+        private readonly IFriendshipRepository _friendshipRepository;
+        private readonly IServerRepository _serverRepository;
         private readonly IUserContextService _userContextService;
 
         public UpdateProfileCommandHandler(
             IUserRepository userRepository,
+            IFriendshipRepository friendshipRepository,
+            IServerRepository serverRepository,
             IUserContextService userContextService)
         {
             _userRepository = userRepository;
+            _friendshipRepository = friendshipRepository;
+            _serverRepository = serverRepository;
             _userContextService = userContextService;
         }
 
@@ -37,14 +43,23 @@ namespace Application.Features.Users.Commands.UpdateProfile
             }
 
             user.Username = request.Username.Trim();
+            user.Bio = string.IsNullOrWhiteSpace(request.Bio) ? null : request.Bio.Trim();
+            user.Status = string.IsNullOrWhiteSpace(request.Status) ? null : request.Status.Trim();
             await _userRepository.UpdateAsync(user);
+
+            var friends = await _friendshipRepository.GetForUserAsync(userId);
+            var servers = await _serverRepository.GetByUserIdAsync(userId);
 
             return new GetProfileResponse
             {
                 Id = user.Id,
                 Email = user.Email,
                 Username = user.Username,
-                CreatedAt = user.CreatedAt
+                CreatedAt = user.CreatedAt,
+                Bio = user.Bio,
+                Status = user.Status,
+                FriendCount = friends.Count,
+                ServerCount = servers.Count
             };
         }
     }

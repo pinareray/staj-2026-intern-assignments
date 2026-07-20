@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, cacheCurrentUserProfile } from "@/lib/api";
 import type { ChannelItem } from "@/types/chat";
 
 export type DmListItem = {
@@ -55,8 +55,17 @@ export default function DmSidebar({
   const [username, setUsername] = useState("");
 
   useEffect(() => {
-    const name = localStorage.getItem("username");
-    if (name) setUsername(name);
+    const loadProfile = async () => {
+      const cached = localStorage.getItem("username");
+      if (cached) setUsername(cached);
+
+      const profile = await cacheCurrentUserProfile();
+      if (profile?.username) {
+        setUsername(profile.username);
+      }
+    };
+
+    void loadProfile();
   }, []);
 
   const loadFriendsFallback = useCallback(async (token: string) => {

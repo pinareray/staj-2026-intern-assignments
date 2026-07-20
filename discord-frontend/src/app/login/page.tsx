@@ -13,6 +13,7 @@ import {
   getAuthErrorMessage,
   validateEmail,
 } from "@/lib/authValidation";
+import { cacheCurrentUserProfile } from "@/lib/api";
 
 const API_BASE_URL = "http://localhost:5243";
 
@@ -71,6 +72,7 @@ export default function LoginPage() {
       }
 
       localStorage.setItem("token", token);
+      await cacheCurrentUserProfile();
       router.push("/app");
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {

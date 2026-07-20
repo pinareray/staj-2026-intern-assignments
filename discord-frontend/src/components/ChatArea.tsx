@@ -4,6 +4,7 @@ import {
   FormEvent,
   KeyboardEvent,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -15,6 +16,7 @@ import {
   LogLevel,
 } from "@microsoft/signalr";
 import FriendsList from "@/components/FriendsList";
+import { API_BASE_URL } from "@/lib/api";
 import type { ChannelItem, ChatMessage } from "@/types/chat";
 
 type ChatAreaProps = {
@@ -40,6 +42,7 @@ function mapMessage(
       m.channelId ?? m.ChannelId ?? fallbackChannelId ?? ""
     ),
     createdAt: String(m.createdAt ?? m.CreatedAt ?? ""),
+    isStarred: Boolean(m.isStarred ?? m.IsStarred ?? false),
   };
 }
 
@@ -62,6 +65,10 @@ export default function ChatArea({
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUsername, setCurrentUsername] = useState("Sen");
   const [friendsOpen, setFriendsOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [authorFilter, setAuthorFilter] = useState("");
+  const [starredOnly, setStarredOnly] = useState(false);
 
   const connectionRef = useRef<HubConnection | null>(null);
   const joinedChannelRef = useRef<string | null>(null);
@@ -224,7 +231,7 @@ export default function ChatArea({
       setLoading(true);
       try {
         const response = await fetch(
-          `http://localhost:5243/api/messages/${selectedChannelId}`,
+          `${API_BASE_URL}/api/messages/${selectedChannelId}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -252,6 +259,9 @@ export default function ChatArea({
     };
 
     setDraft("");
+    setSearchQuery("");
+    setAuthorFilter("");
+    setStarredOnly(false);
     loadMessages();
   }, [selectedChannelId, router]);
 
@@ -262,6 +272,75 @@ export default function ChatArea({
       hour: "2-digit",
       minute: "2-digit",
     });
+  };
+
+  const visibleMessages = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const author = authorFilter.trim().toLowerCase().replace(/^@+/, "");
+
+    return messages.filter((message) => {
+      if (starredOnly && !message.isStarred) return false;
+      if (author && !message.username.toLowerCase().includes(author)) return false;
+      if (q && !message.content.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [messages, searchQuery, authorFilter, starredOnly]);
+
+  const uniqueAuthors = useMemo(
+    () => [...new Set(messages.map((m) => m.username))].sort(),
+    [messages]
+  );
+
+  const highlightContent = (content: string) => {
+    const q = searchQuery.trim();
+    if (!q) return content;
+
+    const lower = content.toLowerCase();
+    const idx = lower.indexOf(q.toLowerCase());
+    if (idx === -1) return content;
+
+    return (
+      <>
+        {content.slice(0, idx)}
+        <mark className="rounded bg-amber-200/80 px-0.5 text-stone-900">
+          {content.slice(idx, idx + q.length)}
+        </mark>
+        {content.slice(idx + q.length)}
+      </>
+    );
+  };
+
+  const toggleStar = async (message: ChatMessage) => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    const next = !message.isStarred;
+    setMessages((prev) =>
+      prev.map((m) => (m.id === message.id ? { ...m, isStarred: next } : m))
+    );
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/messages/${message.id}/star`,
+        {
+          method: next ? "POST" : "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      if (!response.ok) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === message.id ? { ...m, isStarred: !next } : m
+          )
+        );
+      }
+    } catch {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === message.id ? { ...m, isStarred: !next } : m
+        )
+      );
+    }
   };
 
   const handleSend = async () => {
@@ -411,17 +490,68 @@ export default function ChatArea({
             <span className="material-symbols-outlined">group</span>
           </button>
           <div className="relative">
-            <input
-              className="bg-stone-100 border border-stone-200 rounded-full py-1.5 px-4 text-sm w-40 focus:ring-1 focus:ring-primary-container/40 placeholder:text-stone-400 outline-none text-stone-900"
-              placeholder="Ara..."
-              type="text"
-            />
-            <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-sm text-stone-400">
-              search
-            </span>
+            <button
+              type="button"
+              onClick={() => setSearchOpen((v) => !v)}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-hanken text-xs font-semibold transition-colors ${
+                searchOpen
+                  ? "border-primary-container/40 bg-primary-container/10 text-primary-container"
+                  : "border-stone-200 bg-stone-100 text-stone-500 hover:text-primary-container"
+              }`}
+            >
+              <span className="material-symbols-outlined text-base">search</span>
+              Ara
+            </button>
           </div>
         </div>
       </header>
+
+      {searchOpen && selectedChannel && (
+        <div className="border-b border-stone-200 bg-white px-6 py-4 space-y-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="min-w-[180px] flex-1 space-y-1">
+              <span className="font-hanken text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                Kelime ara
+              </span>
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Mesaj içeriğinde ara..."
+                className="w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 font-hanken text-sm text-stone-900 outline-none focus:border-primary-container/40"
+              />
+            </label>
+            <label className="min-w-[160px] flex-1 space-y-1">
+              <span className="font-hanken text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                Kişi
+              </span>
+              <input
+                value={authorFilter}
+                onChange={(e) => setAuthorFilter(e.target.value)}
+                list="chat-authors"
+                placeholder="@kullanici"
+                className="w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 font-hanken text-sm text-stone-900 outline-none focus:border-primary-container/40"
+              />
+              <datalist id="chat-authors">
+                {uniqueAuthors.map((name) => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
+            </label>
+            <label className="flex items-center gap-2 pb-2 font-hanken text-sm text-stone-600">
+              <input
+                type="checkbox"
+                checked={starredOnly}
+                onChange={(e) => setStarredOnly(e.target.checked)}
+                className="rounded border-stone-300 text-primary-container focus:ring-primary-container/40"
+              />
+              Sadece yıldızlı
+            </label>
+          </div>
+          <p className="font-hanken text-xs text-stone-400">
+            {visibleMessages.length} / {messages.length} mesaj gösteriliyor
+          </p>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-8 inner-depth space-y-6 bg-gradient-to-br from-white to-[#f7f4ef]">
         {!selectedChannel && isDmMode && (
@@ -463,8 +593,14 @@ export default function ChatArea({
           </p>
         )}
 
+        {selectedChannel && !loading && messages.length > 0 && visibleMessages.length === 0 && (
+          <p className="text-center text-sm text-stone-400 font-hanken pt-10 w-full">
+            Arama kriterlerine uygun mesaj bulunamadı.
+          </p>
+        )}
+
         {selectedChannel &&
-          messages.map((message) => {
+          visibleMessages.map((message) => {
             const isMine =
               currentUserId !== null && message.userId === currentUserId;
 
@@ -478,6 +614,23 @@ export default function ChatArea({
                   </div>
                   <div className="flex-1 space-y-1 text-right">
                     <div className="flex items-baseline gap-2 justify-end">
+                      <button
+                        type="button"
+                        title={message.isStarred ? "Yıldızı kaldır" : "Yıldızla"}
+                        onClick={() => void toggleStar(message)}
+                        className={`material-symbols-outlined text-base transition-colors ${
+                          message.isStarred
+                            ? "text-amber-500"
+                            : "text-stone-300 hover:text-amber-500"
+                        }`}
+                        style={
+                          message.isStarred
+                            ? { fontVariationSettings: "'FILL' 1" }
+                            : undefined
+                        }
+                      >
+                        star
+                      </button>
                       <span className="text-[10px] text-stone-400 font-medium">
                         {formatTime(message.createdAt)}
                       </span>
@@ -495,7 +648,7 @@ export default function ChatArea({
                     </div>
                     <div className="inline-block max-w-[85%] p-4 rounded-xl rounded-tr-sm bg-primary-container text-white shadow-md text-left">
                       <p className="text-sm font-hanken leading-relaxed">
-                        {message.content}
+                        {highlightContent(message.content)}
                       </p>
                     </div>
                   </div>
@@ -526,10 +679,27 @@ export default function ChatArea({
                     <span className="text-[10px] text-stone-400 font-medium">
                       {formatTime(message.createdAt)}
                     </span>
+                    <button
+                      type="button"
+                      title={message.isStarred ? "Yıldızı kaldır" : "Yıldızla"}
+                      onClick={() => void toggleStar(message)}
+                      className={`material-symbols-outlined ml-auto text-base transition-colors ${
+                        message.isStarred
+                          ? "text-amber-500"
+                          : "text-stone-300 hover:text-amber-500"
+                      }`}
+                      style={
+                        message.isStarred
+                          ? { fontVariationSettings: "'FILL' 1" }
+                          : undefined
+                      }
+                    >
+                      star
+                    </button>
                   </div>
                   <div className="inline-block max-w-[85%] p-4 rounded-xl rounded-tl-sm bg-white text-stone-800 shadow-sm border border-stone-200">
                     <p className="text-sm font-hanken leading-relaxed">
-                      {message.content}
+                      {highlightContent(message.content)}
                     </p>
                   </div>
                 </div>

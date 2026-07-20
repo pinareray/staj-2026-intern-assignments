@@ -40,14 +40,19 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-// React Native / Next.js için CORS (MVP: herkese açık).
+// React Native / Next.js için CORS — SignalR credentials ile uyumlu spesifik origin'ler.
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("ClientCors", policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.WithOrigins(
+                "http://localhost:3000",
+                "http://localhost:3002",
+                "http://127.0.0.1:3000",
+                "http://127.0.0.1:3002")
               .AllowAnyMethod()
-              .AllowAnyHeader();
+              .AllowAnyHeader()
+              .AllowCredentials();
     });
 });
 
@@ -139,6 +144,21 @@ using (var scope = app.Services.CreateScope())
         );
         CREATE UNIQUE INDEX IF NOT EXISTS "IX_ChannelMembers_ChannelId_UserId" ON "ChannelMembers" ("ChannelId", "UserId");
         CREATE INDEX IF NOT EXISTS "IX_ChannelMembers_UserId" ON "ChannelMembers" ("UserId");
+
+        ALTER TABLE "Users" ADD COLUMN IF NOT EXISTS "Bio" text;
+        ALTER TABLE "Users" ADD COLUMN IF NOT EXISTS "Status" text;
+
+        CREATE TABLE IF NOT EXISTS "StarredMessages" (
+            "Id" uuid NOT NULL,
+            "UserId" uuid NOT NULL,
+            "MessageId" uuid NOT NULL,
+            "StarredAt" timestamp with time zone NOT NULL,
+            CONSTRAINT "PK_StarredMessages" PRIMARY KEY ("Id"),
+            CONSTRAINT "FK_StarredMessages_Users_UserId" FOREIGN KEY ("UserId") REFERENCES "Users" ("Id") ON DELETE CASCADE,
+            CONSTRAINT "FK_StarredMessages_Messages_MessageId" FOREIGN KEY ("MessageId") REFERENCES "Messages" ("Id") ON DELETE CASCADE
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS "IX_StarredMessages_UserId_MessageId" ON "StarredMessages" ("UserId", "MessageId");
+        CREATE INDEX IF NOT EXISTS "IX_StarredMessages_MessageId" ON "StarredMessages" ("MessageId");
         """);
 }
 

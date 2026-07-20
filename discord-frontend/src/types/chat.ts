@@ -18,4 +18,5 @@ export type ChatMessage = {
   username: string;
   channelId: string;
   createdAt: string;
+  isStarred?: boolean;
 };

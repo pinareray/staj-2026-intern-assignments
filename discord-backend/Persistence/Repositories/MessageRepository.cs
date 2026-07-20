@@ -24,6 +24,11 @@ namespace Persistence.Repositories
             await _context.SaveChangesAsync();
         }
 
+        public async Task<Message?> GetByIdAsync(Guid id)
+        {
+            return await _context.Messages.FirstOrDefaultAsync(m => m.Id == id);
+        }
+
         public async Task<List<Message>> GetByChannelIdAsync(Guid channelId)
         {
             return await _context.Messages
