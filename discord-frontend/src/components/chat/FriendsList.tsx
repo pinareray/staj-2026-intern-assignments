@@ -14,6 +14,13 @@ type FriendItem = {
   isIncoming: boolean;
 };
 
+type ServerInviteItem = {
+  inviteId: string;
+  serverId: string;
+  serverName: string;
+  inviterUsername: string;
+};
+
 type SearchUser = {
   id: string;
   username: string;
@@ -24,6 +31,9 @@ type FriendsListProps = {
   onClose: () => void;
   onOpenDm?: (channel: ChannelItem) => void;
   onDmAccepted?: () => void;
+  onServersChanged?: () => void;
+  /** Açılışta seçilecek sekme */
+  initialTab?: "incoming" | "outgoing" | "friends" | "invites";
 };
 
 function normalizeUsername(value: string) {
@@ -45,9 +55,12 @@ export default function FriendsList({
   onClose,
   onOpenDm,
   onDmAccepted,
+  onServersChanged,
+  initialTab = "friends",
 }: FriendsListProps) {
   const router = useRouter();
   const [friends, setFriends] = useState<FriendItem[]>([]);
+  const [serverInvites, setServerInvites] = useState<ServerInviteItem[]>([]);
   const [username, setUsername] = useState("@");
   const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
   const [searching, setSearching] = useState(false);
@@ -57,7 +70,9 @@ export default function FriendsList({
   const [sending, setSending] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
-  const [tab, setTab] = useState<"incoming" | "outgoing" | "friends">("friends");
+  const [tab, setTab] = useState<
+    "incoming" | "outgoing" | "friends" | "invites"
+  >("friends");
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -97,6 +112,37 @@ export default function FriendsList({
       setLoading(false);
     }
   }, []);
+
+  const loadServerInvites = useCallback(async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/servers/invites`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) return;
+
+      const data = await response.json();
+      const list = Array.isArray(data) ? data : [];
+      setServerInvites(
+        list.map((i: Record<string, unknown>) => ({
+          inviteId: String(i.inviteId ?? i.InviteId),
+          serverId: String(i.serverId ?? i.ServerId),
+          serverName: String(i.serverName ?? i.ServerName ?? "Sunucu"),
+          inviterUsername: String(
+            i.inviterUsername ?? i.InviterUsername ?? "Kullanıcı"
+          ),
+        }))
+      );
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const refreshSocial = useCallback(async () => {
+    await Promise.all([loadFriends(), loadServerInvites()]);
+  }, [loadFriends, loadServerInvites]);
 
   const searchUsers = useCallback(async (query: string) => {
     const token = localStorage.getItem("token");
@@ -155,9 +201,9 @@ export default function FriendsList({
     setSearchResults([]);
     setError("");
     setSuccess("");
-    setTab("friends");
-    void loadFriends();
-  }, [isOpen, loadFriends]);
+    setTab(initialTab);
+    void refreshSocial();
+  }, [isOpen, refreshSocial, initialTab]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -222,33 +268,22 @@ export default function FriendsList({
         return;
       }
 
-      const friendshipId = String(data.id ?? data.Id ?? crypto.randomUUID());
-      const userId = String(data.addresseeId ?? data.AddresseeId ?? "");
       const uname = String(data.username ?? data.Username ?? name);
 
       setUsername("@");
       setSearchResults([]);
-      setSuccess(`@${uname} kullanıcısına istek gönderildi.`);
-      setTab("outgoing");
-
-      const optimistic: FriendItem = {
-        friendshipId,
-        userId,
-        username: uname,
-        status: "Pending",
-        isIncoming: false,
-      };
-
+      const autoAccepted =
+        data.autoAccepted === true || data.AutoAccepted === true;
+      setSuccess(
+        autoAccepted
+          ? `@${uname} ile artık arkadaşsınız.`
+          : `@${uname} kullanıcısına istek gönderildi.`
+      );
+      setTab(autoAccepted ? "friends" : "outgoing");
       await loadFriends();
-      setFriends((prev) => {
-        const already = prev.some(
-          (f) =>
-            f.status === "Pending" &&
-            !f.isIncoming &&
-            f.username.toLowerCase() === uname.toLowerCase()
-        );
-        return already ? prev : [optimistic, ...prev];
-      });
+      if (autoAccepted) {
+        onDmAccepted?.();
+      }
     } catch {
       setError("Sunucuya bağlanılamadı.");
     } finally {
@@ -398,15 +433,86 @@ export default function FriendsList({
     }
   };
 
+  const handleAcceptServerInvite = async (inviteId: string) => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    setActionId(inviteId);
+    setError("");
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/servers/invites/${inviteId}/accept`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      const data = (await response.json().catch(() => ({}))) as Record<
+        string,
+        unknown
+      >;
+      if (!response.ok) {
+        setError(String(data.message ?? "Davet kabul edilemedi."));
+        return;
+      }
+
+      const serverName = String(data.serverName ?? data.ServerName ?? "Sunucu");
+      setSuccess(`“${serverName}” sunucusuna katıldın.`);
+      await loadServerInvites();
+      onServersChanged?.();
+      setTab("invites");
+    } catch {
+      setError("Sunucuya bağlanılamadı.");
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const handleRejectServerInvite = async (inviteId: string) => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    setActionId(inviteId);
+    setError("");
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/servers/invites/${inviteId}/reject`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      const data = (await response.json().catch(() => ({}))) as Record<
+        string,
+        unknown
+      >;
+      if (!response.ok) {
+        setError(String(data.message ?? "Davet reddedilemedi."));
+        return;
+      }
+
+      setSuccess("Davet reddedildi.");
+      await loadServerInvites();
+    } catch {
+      setError("Sunucuya bağlanılamadı.");
+    } finally {
+      setActionId(null);
+    }
+  };
+
   const openProfile = (name: string) => {
     onClose();
     router.push(`/profile/${encodeURIComponent(name)}`);
   };
 
   const accepted = friends.filter((f) => f.status === "Accepted");
+  const acceptedIds = new Set(accepted.map((f) => f.userId));
   const incoming = friends.filter((f) => f.status === "Pending" && f.isIncoming);
   const outgoing = friends.filter(
-    (f) => f.status === "Pending" && !f.isIncoming
+    (f) =>
+      f.status === "Pending" &&
+      !f.isIncoming &&
+      !acceptedIds.has(f.userId)
   );
   const queryLen = normalizeUsername(username).length;
   const showSearchPanel = queryLen >= 2 || searchResults.length > 0 || searching;
@@ -557,6 +663,11 @@ export default function FriendsList({
                     count: outgoing.length,
                   },
                   {
+                    id: "invites" as const,
+                    label: "Davetler",
+                    count: serverInvites.length,
+                  },
+                  {
                     id: "friends" as const,
                     label: "Arkadaşlar",
                     count: accepted.length,
@@ -680,6 +791,59 @@ export default function FriendsList({
                       >
                         İptal
                       </button>
+                    </div>
+                  ))
+                )}
+              </>
+            )}
+
+            {!loading && tab === "invites" && (
+              <>
+                {serverInvites.length === 0 ? (
+                  <p className="rounded-xl border border-dashed border-outline-variant px-3 py-6 text-center font-hanken text-sm text-on-surface-variant">
+                    Bekleyen sunucu daveti yok.
+                  </p>
+                ) : (
+                  serverInvites.map((invite) => (
+                    <div
+                      key={invite.inviteId}
+                      className="flex items-center gap-3 rounded-xl border border-outline-variant bg-surface-container-low p-3"
+                    >
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-container/15">
+                        <span className="font-libre text-sm font-bold uppercase text-primary-container">
+                          {invite.serverName.charAt(0) || "S"}
+                        </span>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-hanken text-sm font-medium text-on-surface">
+                          {invite.serverName}
+                        </p>
+                        <p className="text-[10px] text-on-surface-variant">
+                          @{invite.inviterUsername} davet etti
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 gap-1.5">
+                        <button
+                          type="button"
+                          disabled={actionId === invite.inviteId}
+                          onClick={() =>
+                            void handleAcceptServerInvite(invite.inviteId)
+                          }
+                          className="rounded-lg bg-primary-container px-2.5 py-1.5 font-hanken text-xs font-semibold text-on-primary transition-colors hover:bg-secondary-container disabled:opacity-50"
+                        >
+                          Kabul
+                        </button>
+                        <button
+                          type="button"
+                          disabled={actionId === invite.inviteId}
+                          onClick={() =>
+                            void handleRejectServerInvite(invite.inviteId)
+                          }
+                          className="rounded-lg border border-outline-variant bg-surface px-2.5 py-1.5 font-hanken text-xs font-semibold text-on-surface-variant transition-colors hover:border-red-300 hover:text-red-600 disabled:opacity-50"
+                        >
+                          Reddet
+                        </button>
+                      </div>
                     </div>
                   ))
                 )}

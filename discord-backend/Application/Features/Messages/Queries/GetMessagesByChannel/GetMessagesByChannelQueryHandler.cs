@@ -78,7 +78,8 @@ namespace Application.Features.Messages.Queries.GetMessagesByChannel
                     CreatedAt = message.CreatedAt,
                     EditedAt = message.EditedAt,
                     AttachmentUrl = message.AttachmentUrl,
-                    IsStarred = starredIds.Contains(message.Id)
+                    IsStarred = starredIds.Contains(message.Id),
+                    IsPinned = message.IsPinned
                 });
             }
 

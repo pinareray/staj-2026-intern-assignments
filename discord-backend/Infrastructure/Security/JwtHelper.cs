@@ -31,6 +31,11 @@ namespace Infrastructure.Security
                 new Claim(ClaimTypes.Email, user.Email)
             };
 
+            if (user.IsPlatformAdmin)
+            {
+                claims.Add(new Claim(ClaimTypes.Role, "PlatformAdmin"));
+            }
+
             // 2. Güvenlik Anahtarı (Token'ı kimse sahtesiyle değiştiremesin diye).
             var securityKey = _configuration["TokenOptions:SecurityKey"]
                 ?? throw new InvalidOperationException("TokenOptions:SecurityKey yapılandırması eksik.");

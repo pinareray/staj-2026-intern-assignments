@@ -51,6 +51,14 @@ namespace Persistence.Repositories
                 .ToListAsync();
         }
 
+        public async Task<List<Message>> GetPinnedByChannelIdAsync(Guid channelId)
+        {
+            return await _context.Messages
+                .Where(m => m.ChannelId == channelId && m.IsPinned)
+                .OrderByDescending(m => m.PinnedAt ?? m.CreatedAt)
+                .ToListAsync();
+        }
+
         public async Task<Message?> GetLatestByChannelIdAsync(Guid channelId)
         {
             return await _context.Messages

@@ -2,6 +2,7 @@ using Application.Interfaces;
 using Application.Repositories;
 using MediatR;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -57,9 +58,20 @@ namespace Application.Features.Friends.Queries.GetFriends
                 });
             }
 
+            var acceptedUserIds = result
+                .Where(r => r.Status == "Accepted")
+                .Select(r => r.UserId)
+                .ToHashSet();
+
             var pendingOutgoing = await _friendshipRepository.GetOutgoingPendingForUserAsync(currentUserId);
             foreach (var f in pendingOutgoing)
             {
+                // Zaten arkadaşsa Giden'de gösterme (ters Pending kalıntısı).
+                if (acceptedUserIds.Contains(f.AddresseeId))
+                {
+                    continue;
+                }
+
                 var user = await _userRepository.GetByIdAsync(f.AddresseeId);
                 result.Add(new FriendDto
                 {

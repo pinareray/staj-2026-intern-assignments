@@ -92,7 +92,7 @@ Aşağıdakiler ya hiç yapılmadı ya da kısmen var; ürün olgunluğu için s
 
 ### Orta öncelik
 
-- [ ] **Ses kanalları** — Tip seçilebilir ama gerçek ses/WebRTC yok (bilinçli olarak ertelendi)
+- [x] **Ses kanalları** — Lobi + mesh WebRTC (SignalR sinyal, mute/deafen, STUN)
 - [x] **Mesaj düzenleme / silme** — API + UI + SignalR
 - [x] **Dosya / görsel ekleme** — `POST /api/messages/upload` + attachmentUrl
 - [x] **Bildirimler (browser push / ses)** — Sekme gizliyken DM Notification API

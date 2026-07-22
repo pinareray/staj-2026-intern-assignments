@@ -19,6 +19,7 @@ type ServerSidebarProps = {
   messagesActive?: boolean;
   totalUnread?: number;
   onMessagesHome?: () => void;
+  onOpenFriends?: () => void;
   onServerSelect: (server: ServerItem) => void;
   refreshKey?: number;
 };
@@ -28,6 +29,7 @@ export default function ServerSidebar({
   messagesActive = false,
   totalUnread = 0,
   onMessagesHome,
+  onOpenFriends,
   onServerSelect,
   refreshKey: externalRefreshKey = 0,
 }: ServerSidebarProps) {
@@ -181,6 +183,29 @@ export default function ServerSidebar({
             {!messagesActive && totalUnread > 0 && (
               <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-container px-1 font-hanken text-[10px] font-bold text-white ring-2 ring-mahogany-dark">
                 {totalUnread > 9 ? "9+" : totalUnread}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            title="Arkadaşlar"
+            aria-label="Arkadaşlar"
+            onClick={() => onOpenFriends?.()}
+            className={`group relative flex shrink-0 items-center rounded-2xl border-2 border-stone-200 bg-white shadow-sm transition-all duration-300 hover:rounded-xl hover:bg-primary-container/10 ${
+              compact ? "h-12 w-12 justify-center" : "h-12 w-full gap-3 px-3"
+            }`}
+          >
+            <span className="material-symbols-outlined text-xl text-stone-500 group-hover:text-primary-container">
+              group
+            </span>
+            {showLabels ? (
+              <span className="truncate font-hanken text-sm font-semibold text-stone-600 group-hover:text-primary-container">
+                Arkadaşlar
+              </span>
+            ) : (
+              <span className="pointer-events-none absolute left-full z-50 ml-2 whitespace-nowrap rounded-md bg-stone-900 px-2 py-1 font-hanken text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                Arkadaşlar
               </span>
             )}
           </button>

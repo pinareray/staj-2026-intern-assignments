@@ -19,3 +19,5 @@ export {
 } from "./api";
 export type { CachedUserProfile, UserSearchHit } from "./api";
 export { chatHub } from "./chatHub";
+export { VoiceSession } from "./voiceSession";
+export type { VoicePeerState, VoiceSessionState } from "./voiceSession";

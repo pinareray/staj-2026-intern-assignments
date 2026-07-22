@@ -10,7 +10,9 @@ import {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
-import FriendsList from "@/components/chat/FriendsList";
+import ChannelExtrasPanel from "@/components/chat/ChannelExtrasPanel";
+import DmSettingsModal from "@/components/modals/DmSettingsModal";
+import VoiceLobby from "@/components/chat/VoiceLobby";
 import {
   API_BASE_URL,
   deleteMessage,
@@ -30,9 +32,8 @@ type ChatAreaProps = {
   isDmMode?: boolean;
   sidePanelCollapsed?: boolean;
   onExpandSidePanel?: () => void;
-  onOpenDm?: (channel: ChannelItem) => void;
-  onDmAccepted?: () => void;
   onIncomingMessage?: () => void;
+  onOpenNotifications?: () => void;
 };
 
 function mapMessage(
@@ -53,6 +54,7 @@ function mapMessage(
     editedAt: editedRaw ? String(editedRaw) : null,
     attachmentUrl: attachmentRaw ? String(attachmentRaw) : null,
     isStarred: Boolean(m.isStarred ?? m.IsStarred ?? false),
+    isPinned: Boolean(m.isPinned ?? m.IsPinned ?? false),
   };
 }
 
@@ -94,9 +96,8 @@ export default function ChatArea({
   isDmMode = false,
   sidePanelCollapsed = false,
   onExpandSidePanel,
-  onOpenDm,
-  onDmAccepted,
   onIncomingMessage,
+  onOpenNotifications,
 }: ChatAreaProps) {
   const router = useRouter();
   const selectedChannelId = selectedChannel?.id ?? null;
@@ -110,7 +111,11 @@ export default function ChatArea({
     if (typeof window === "undefined") return "Sen";
     return localStorage.getItem("username") || "Sen";
   });
-  const [friendsOpen, setFriendsOpen] = useState(false);
+  const [inviteBadge, setInviteBadge] = useState(0);
+  const [extrasOpen, setExtrasOpen] = useState(false);
+  const [extrasTab, setExtrasTab] = useState<"members" | "pins">("members");
+  const [dmSettingsOpen, setDmSettingsOpen] = useState(false);
+  const [dmPeerUserId, setDmPeerUserId] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [authorFilter, setAuthorFilter] = useState("");
@@ -153,6 +158,34 @@ export default function ChatArea({
     currentUsername,
     currentUserId,
   ]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadInviteBadge = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/servers/invites`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok || cancelled) return;
+        const data = await response.json();
+        if (!cancelled) {
+          setInviteBadge(Array.isArray(data) ? data.length : 0);
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    void loadInviteBadge();
+    const timer = window.setInterval(() => void loadInviteBadge(), 20000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -330,6 +363,44 @@ export default function ChatArea({
       shouldAutoScrollRef.current = false;
     });
   }, [messages, loading, selectedChannel]);
+
+  useEffect(() => {
+    setDmSettingsOpen(false);
+    setDmPeerUserId(null);
+
+    if (selectedChannel?.type !== "DM" || !selectedChannel.name) return;
+
+    const fromMessages = messages.find(
+      (m) => currentUserId && m.userId !== currentUserId
+    );
+    if (fromMessages) {
+      setDmPeerUserId(fromMessages.userId);
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/users/${encodeURIComponent(selectedChannel.name)}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (!response.ok || cancelled) return;
+        const data = (await response.json()) as Record<string, unknown>;
+        const id = String(data.id ?? data.Id ?? "");
+        if (id && !cancelled) setDmPeerUserId(id);
+      } catch {
+        // ignore
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedChannel?.id, selectedChannel?.type, selectedChannel?.name, messages, currentUserId]);
 
   // Geçmiş mesajlar
   useEffect(() => {
@@ -602,6 +673,39 @@ export default function ChatArea({
     }
   };
 
+  const togglePin = async (message: ChatMessage) => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    const next = !message.isPinned;
+    setMessages((prev) =>
+      prev.map((m) => (m.id === message.id ? { ...m, isPinned: next } : m))
+    );
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/messages/${message.id}/pin`,
+        {
+          method: next ? "POST" : "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      if (!response.ok) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === message.id ? { ...m, isPinned: !next } : m
+          )
+        );
+      }
+    } catch {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === message.id ? { ...m, isPinned: !next } : m
+        )
+      );
+    }
+  };
+
   const startEdit = (message: ChatMessage) => {
     setEditingMessageId(message.id);
     setEditDraft(message.content);
@@ -771,6 +875,8 @@ export default function ChatArea({
     }
   };
 
+  const isVoiceChannel = selectedChannel?.type === "Voice";
+
   return (
     <main className="flex-1 flex flex-col overflow-hidden relative bg-background">
       <header className="h-16 px-6 flex items-center justify-between border-b border-stone-200 z-10 bg-white">
@@ -789,7 +895,11 @@ export default function ChatArea({
             className="material-symbols-outlined text-primary-container"
             style={{ fontVariationSettings: "'FILL' 1" }}
           >
-            {isDmMode || selectedChannel?.type === "DM" ? "alternate_email" : "tag"}
+            {isDmMode || selectedChannel?.type === "DM"
+              ? "alternate_email"
+              : isVoiceChannel
+                ? "volume_up"
+                : "tag"}
           </span>
           <div>
             <h2 className="font-libre text-lg text-stone-900">
@@ -815,7 +925,11 @@ export default function ChatArea({
                 : selectedChannel
                   ? selectedChannel.type === "DM"
                     ? "Özel mesaj"
-                    : `#${selectedChannel.name} sohbet kanalı`
+                    : isVoiceChannel
+                      ? "Ses kanalı"
+                      : selectedChannel.type === "Announcement"
+                        ? "Duyuru kanalı"
+                        : "Sohbet kanalı"
                   : isDmMode
                     ? "Soldan bir arkadaş sohbeti seç"
                     : hasServer && !channelsReady
@@ -827,48 +941,102 @@ export default function ChatArea({
           </div>
         </div>
 
-        <div className="flex items-center gap-6">
-          <div className="hidden lg:flex items-center gap-4 text-stone-400">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          {selectedChannel?.type === "DM" && (
             <button
               type="button"
-              title="Arkadaşlar"
-              onClick={() => setFriendsOpen(true)}
-              className="flex items-center gap-1.5 hover:text-primary-container transition-colors"
+              title="Sohbet ayarları"
+              aria-label="Sohbet ayarları"
+              onClick={() => setDmSettingsOpen(true)}
+              className="group relative rounded-lg p-2 text-stone-400 transition-colors hover:bg-stone-100 hover:text-primary-container"
             >
-              <span className="material-symbols-outlined">group</span>
-              <span className="text-xs font-hanken font-semibold uppercase tracking-wide">
-                Arkadaşlar
+              <span className="material-symbols-outlined text-xl">settings</span>
+              <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-stone-900 px-2 py-1 font-hanken text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                Sohbet ayarları
               </span>
             </button>
-            <span className="material-symbols-outlined hover:text-primary-container cursor-pointer">
-              notifications
-            </span>
-          </div>
+          )}
           <button
             type="button"
-            title="Arkadaşlar"
-            onClick={() => setFriendsOpen(true)}
-            className="lg:hidden text-stone-400 hover:text-primary-container"
+            title="Bildirimler"
+            aria-label="Bildirimler"
+            onClick={() => onOpenNotifications?.()}
+            className="group relative rounded-lg p-2 text-stone-400 transition-colors hover:bg-stone-100 hover:text-primary-container"
           >
-            <span className="material-symbols-outlined">group</span>
+            <span className="material-symbols-outlined text-xl">
+              notifications
+            </span>
+            {inviteBadge > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary-container px-1 font-hanken text-[10px] font-bold text-white">
+                {inviteBadge > 9 ? "9+" : inviteBadge}
+              </span>
+            )}
+            <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-stone-900 px-2 py-1 font-hanken text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+              Bildirimler
+            </span>
           </button>
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setSearchOpen((v) => !v)}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-hanken text-xs font-semibold transition-colors ${
-                searchOpen
-                  ? "border-primary-container/40 bg-primary-container/10 text-primary-container"
-                  : "border-stone-200 bg-stone-100 text-stone-500 hover:text-primary-container"
-              }`}
-            >
-              <span className="material-symbols-outlined text-base">search</span>
+          <button
+            type="button"
+            title="Üyeler"
+            aria-label="Üyeler"
+            disabled={!selectedChannel?.serverId}
+            onClick={() => {
+              setExtrasTab("members");
+              setExtrasOpen(true);
+            }}
+            className="group relative rounded-lg p-2 text-stone-400 transition-colors hover:bg-stone-100 hover:text-primary-container disabled:opacity-40"
+          >
+            <span className="material-symbols-outlined text-xl">
+              manage_accounts
+            </span>
+            <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-stone-900 px-2 py-1 font-hanken text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+              Üyeler
+            </span>
+          </button>
+          <button
+            type="button"
+            title="Sabit mesajlar"
+            aria-label="Sabit mesajlar"
+            disabled={!selectedChannel}
+            onClick={() => {
+              setExtrasTab("pins");
+              setExtrasOpen(true);
+            }}
+            className="group relative rounded-lg p-2 text-stone-400 transition-colors hover:bg-stone-100 hover:text-primary-container disabled:opacity-40"
+          >
+            <span className="material-symbols-outlined text-xl">push_pin</span>
+            <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-stone-900 px-2 py-1 font-hanken text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+              Sabit mesajlar
+            </span>
+          </button>
+          <button
+            type="button"
+            title="Ara"
+            aria-label="Ara"
+            onClick={() => setSearchOpen((v) => !v)}
+            className={`group relative inline-flex items-center rounded-lg p-2 transition-colors ${
+              searchOpen
+                ? "bg-primary-container/10 text-primary-container"
+                : "text-stone-400 hover:bg-stone-100 hover:text-primary-container"
+            }`}
+          >
+            <span className="material-symbols-outlined text-xl">search</span>
+            <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-stone-900 px-2 py-1 font-hanken text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
               Ara
-            </button>
-          </div>
+            </span>
+          </button>
         </div>
       </header>
 
+      {isVoiceChannel && selectedChannel ? (
+        <VoiceLobby
+          channelId={selectedChannel.id}
+          channelName={selectedChannel.name}
+          currentUserId={currentUserId}
+          currentUsername={currentUsername}
+        />
+      ) : (
+        <>
       {searchOpen && selectedChannel && (
         <div className="border-b border-stone-200 bg-white px-6 py-4 space-y-3">
           <div className="flex flex-wrap items-end gap-3">
@@ -1018,6 +1186,25 @@ export default function ChatArea({
                       >
                         star
                       </button>
+                      <button
+                        type="button"
+                        title={
+                          message.isPinned ? "Sabiti kaldır" : "Mesajı sabitle"
+                        }
+                        onClick={() => void togglePin(message)}
+                        className={`material-symbols-outlined text-base transition-colors ${
+                          message.isPinned
+                            ? "text-primary-container"
+                            : "text-stone-300 hover:text-primary-container"
+                        }`}
+                        style={
+                          message.isPinned
+                            ? { fontVariationSettings: "'FILL' 1" }
+                            : undefined
+                        }
+                      >
+                        push_pin
+                      </button>
                       <span className="text-[10px] text-stone-400 font-medium">
                         {formatTime(message.createdAt)}
                       </span>
@@ -1085,6 +1272,25 @@ export default function ChatArea({
                       }
                     >
                       star
+                    </button>
+                    <button
+                      type="button"
+                      title={
+                        message.isPinned ? "Sabiti kaldır" : "Mesajı sabitle"
+                      }
+                      onClick={() => void togglePin(message)}
+                      className={`material-symbols-outlined text-base transition-colors ${
+                        message.isPinned
+                          ? "text-primary-container"
+                          : "text-stone-300 hover:text-primary-container"
+                      }`}
+                      style={
+                        message.isPinned
+                          ? { fontVariationSettings: "'FILL' 1" }
+                          : undefined
+                      }
+                    >
+                      push_pin
                     </button>
                   </div>
                   <div className="inline-block max-w-[85%] p-4 rounded-xl rounded-tl-sm bg-white text-stone-800 shadow-sm border border-stone-200">
@@ -1184,13 +1390,33 @@ export default function ChatArea({
           </div>
         </form>
       </footer>
+        </>
+      )}
 
-      <FriendsList
-        isOpen={friendsOpen}
-        onClose={() => setFriendsOpen(false)}
-        onOpenDm={onOpenDm}
-        onDmAccepted={onDmAccepted}
+      <ChannelExtrasPanel
+        isOpen={extrasOpen}
+        onClose={() => setExtrasOpen(false)}
+        channelId={selectedChannel?.id ?? null}
+        channelName={selectedChannel?.name ?? ""}
+        serverId={selectedChannel?.serverId ?? null}
+        initialTab={extrasTab}
+        onUnpin={(messageId) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === messageId ? { ...m, isPinned: false } : m
+            )
+          );
+        }}
       />
+
+      {selectedChannel?.type === "DM" && (
+        <DmSettingsModal
+          isOpen={dmSettingsOpen}
+          onClose={() => setDmSettingsOpen(false)}
+          peerUsername={selectedChannel.name}
+          peerUserId={dmPeerUserId}
+        />
+      )}
     </main>
   );
 }

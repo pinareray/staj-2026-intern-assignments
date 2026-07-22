@@ -12,5 +12,8 @@ namespace Domain.Entities
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? EditedAt { get; set; }
         public string? AttachmentUrl { get; set; }
+        public bool IsPinned { get; set; }
+        public DateTime? PinnedAt { get; set; }
+        public Guid? PinnedByUserId { get; set; }
     }
 }

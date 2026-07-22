@@ -1,9 +1,12 @@
 using Application.Features.Messages.Commands.DeleteMessage;
 using Application.Features.Messages.Commands.EditMessage;
-using Application.Features.Messages.Commands.StarMessage;
-using Application.Features.Messages.Commands.UnstarMessage;
+using Application.Features.Messages.Commands.PinMessage;
 using Application.Features.Messages.Commands.SendMessage;
+using Application.Features.Messages.Commands.StarMessage;
+using Application.Features.Messages.Commands.UnpinMessage;
+using Application.Features.Messages.Commands.UnstarMessage;
 using Application.Features.Messages.Queries.GetMessagesByChannel;
+using Application.Features.Messages.Queries.GetPinnedMessages;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
@@ -39,6 +42,23 @@ namespace WebAPI.Controllers
             return Ok(messages);
         }
 
+        [HttpGet("pinned")]
+        public async Task<IActionResult> GetPinned([FromQuery] Guid channelId)
+        {
+            try
+            {
+                var messages = await _mediator.Send(new GetPinnedMessagesQuery
+                {
+                    ChannelId = channelId
+                });
+                return Ok(messages);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         [HttpGet("{channelId:guid}")]
         public async Task<IActionResult> GetByChannel(Guid channelId)
         {
@@ -69,6 +89,34 @@ namespace WebAPI.Controllers
             try
             {
                 var result = await _mediator.Send(new UnstarMessageCommand { MessageId = messageId });
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("{messageId:guid}/pin")]
+        public async Task<IActionResult> Pin(Guid messageId)
+        {
+            try
+            {
+                var result = await _mediator.Send(new PinMessageCommand { MessageId = messageId });
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpDelete("{messageId:guid}/pin")]
+        public async Task<IActionResult> Unpin(Guid messageId)
+        {
+            try
+            {
+                var result = await _mediator.Send(new UnpinMessageCommand { MessageId = messageId });
                 return Ok(result);
             }
             catch (Exception ex)

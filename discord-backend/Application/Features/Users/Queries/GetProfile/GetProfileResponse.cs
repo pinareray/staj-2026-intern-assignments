@@ -12,5 +12,6 @@ namespace Application.Features.Users.Queries.GetProfile
         public string? Status { get; set; }
         public int FriendCount { get; set; }
         public int ServerCount { get; set; }
+        public bool IsPlatformAdmin { get; set; }
     }
 }

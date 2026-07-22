@@ -21,6 +21,7 @@ export type ChatMessage = {
   editedAt?: string | null;
   attachmentUrl?: string | null;
   isStarred?: boolean;
+  isPinned?: boolean;
 };
 
 export type CachedUserProfile = {

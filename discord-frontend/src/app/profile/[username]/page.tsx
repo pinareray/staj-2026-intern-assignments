@@ -254,11 +254,13 @@ export default function ProfilePage() {
   const tabs = useMemo(() => {
     const items: { id: typeof tab; label: string }[] = [
       { id: "about", label: "Hakkında" },
-      { id: "friends", label: "Arkadaşlar" },
-      { id: "servers", label: "Sunucular" },
     ];
     if (profile?.isOwnProfile) {
-      items.push({ id: "settings", label: "Ayarlar" });
+      items.push(
+        { id: "friends", label: "Arkadaşlar" },
+        { id: "servers", label: "Sunucular" },
+        { id: "settings", label: "Ayarlar" }
+      );
     }
     return items;
   }, [profile?.isOwnProfile]);
@@ -333,12 +335,16 @@ export default function ProfilePage() {
               <div className="-mt-14 flex flex-col gap-4 sm:-mt-16 sm:flex-row sm:items-end sm:justify-between">
                 <Avatar username={profile.username} size="xl" />
                 <div className="flex flex-wrap gap-2 pb-1 sm:justify-end">
-                  <div className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1 font-hanken text-xs text-stone-600">
-                    {profile.friendCount} arkadaş
-                  </div>
-                  <div className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1 font-hanken text-xs text-stone-600">
-                    {profile.serverCount} sunucu
-                  </div>
+                  {profile.isOwnProfile && (
+                    <>
+                      <div className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1 font-hanken text-xs text-stone-600">
+                        {profile.friendCount} arkadaş
+                      </div>
+                      <div className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1 font-hanken text-xs text-stone-600">
+                        {profile.serverCount} sunucu
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -504,7 +510,7 @@ export default function ProfilePage() {
                 </div>
               )}
 
-              {tab === "friends" && (
+              {tab === "friends" && profile.isOwnProfile && (
                 <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
                   <h3 className="font-hanken text-[10px] font-bold uppercase tracking-widest text-stone-400">
                     Arkadaşlar ({profile.friends.length})
@@ -538,7 +544,7 @@ export default function ProfilePage() {
                 </section>
               )}
 
-              {tab === "servers" && (
+              {tab === "servers" && profile.isOwnProfile && (
                 <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
                   <h3 className="font-hanken text-[10px] font-bold uppercase tracking-widest text-stone-400">
                     Sunucular
@@ -569,6 +575,21 @@ export default function ProfilePage() {
 
               {tab === "settings" && profile.isOwnProfile && (
                 <div className="space-y-3">
+                  <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+                    <h3 className="font-hanken text-[10px] font-bold uppercase tracking-widest text-stone-400">
+                      Moderasyon
+                    </h3>
+                    <p className="mt-2 font-hanken text-sm text-stone-600">
+                      Platform admin isen kullanıcı şikayetlerini inceleyebilirsin.
+                    </p>
+                    <Link
+                      href="/admin"
+                      className="mt-3 inline-flex rounded-xl bg-primary-container px-4 py-2 font-hanken text-sm font-semibold text-white hover:opacity-90"
+                    >
+                      Şikayet paneline git
+                    </Link>
+                  </section>
+
                   <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
                     <h3 className="font-hanken text-[10px] font-bold uppercase tracking-widest text-stone-400">
                       Gizlilik ve Güvenlik Koşulları

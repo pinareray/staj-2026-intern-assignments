@@ -46,6 +46,25 @@ namespace Application.Features.Users.Queries.GetUserByUsername
             var currentUserId = _userContextService.GetCurrentUserId();
             var isOwn = user.Id == currentUserId;
 
+            if (!isOwn)
+            {
+                return new PublicProfileDto
+                {
+                    Id = user.Id,
+                    Username = user.Username,
+                    CreatedAt = user.CreatedAt,
+                    AvatarUrl = null,
+                    Bio = user.Bio,
+                    Status = user.Status,
+                    FriendCount = 0,
+                    ServerCount = 0,
+                    IsOwnProfile = false,
+                    Email = null,
+                    Friends = new System.Collections.Generic.List<PublicFriendDto>(),
+                    Servers = new System.Collections.Generic.List<PublicServerDto>()
+                };
+            }
+
             var friends = await _friendshipRepository.GetForUserAsync(user.Id);
             var servers = await _serverRepository.GetByUserIdAsync(user.Id);
 

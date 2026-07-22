@@ -1,9 +1,13 @@
 using Application.Features.Channels.Queries.GetChannelsByServer;
+using Application.Features.Servers.Commands.AcceptInvite;
 using Application.Features.Servers.Commands.AddMember;
 using Application.Features.Servers.Commands.CreateServer;
 using Application.Features.Servers.Commands.LeaveServer;
+using Application.Features.Servers.Commands.RejectInvite;
 using Application.Features.Servers.Commands.RemoveMember;
+using Application.Features.Servers.Queries.GetMyInvites;
 using Application.Features.Servers.Queries.GetServerMembers;
+using Application.Features.Servers.Queries.GetServerPendingInvites;
 using Application.Features.Servers.Queries.GetServers;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -30,6 +34,47 @@ namespace WebAPI.Controllers
         {
             var servers = await _mediator.Send(new GetServersQuery());
             return Ok(servers);
+        }
+
+        [HttpGet("invites")]
+        public async Task<IActionResult> GetMyInvites()
+        {
+            var invites = await _mediator.Send(new GetMyServerInvitesQuery());
+            return Ok(invites);
+        }
+
+        [HttpPost("invites/{inviteId:guid}/accept")]
+        public async Task<IActionResult> AcceptInvite(Guid inviteId)
+        {
+            try
+            {
+                var result = await _mediator.Send(new AcceptServerInviteCommand
+                {
+                    InviteId = inviteId
+                });
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("invites/{inviteId:guid}/reject")]
+        public async Task<IActionResult> RejectInvite(Guid inviteId)
+        {
+            try
+            {
+                var result = await _mediator.Send(new RejectServerInviteCommand
+                {
+                    InviteId = inviteId
+                });
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpGet("{serverId:guid}/channels")]
@@ -59,6 +104,23 @@ namespace WebAPI.Controllers
             try
             {
                 var result = await _mediator.Send(new GetServerMembersQuery
+                {
+                    ServerId = serverId
+                });
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("{serverId:guid}/invites")]
+        public async Task<IActionResult> GetServerInvites(Guid serverId)
+        {
+            try
+            {
+                var result = await _mediator.Send(new GetServerPendingInvitesQuery
                 {
                     ServerId = serverId
                 });

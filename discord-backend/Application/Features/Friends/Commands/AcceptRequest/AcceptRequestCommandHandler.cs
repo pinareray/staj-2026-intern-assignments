@@ -46,6 +46,12 @@ namespace Application.Features.Friends.Commands.AcceptRequest
             friendship.Status = "Accepted";
             await _friendshipRepository.UpdateAsync(friendship);
 
+            // Karşılıklı Pending kaldıysa (A→B ve B→A) Giden'de hayalet istek bırakma.
+            await _friendshipRepository.DeleteOtherPendingBetweenAsync(
+                friendship.RequesterId,
+                friendship.AddresseeId,
+                friendship.Id);
+
             var dmChannel = await _dmChannelService.FindOrCreateDmAsync(
                 friendship.RequesterId,
                 friendship.AddresseeId,

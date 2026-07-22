@@ -3,6 +3,7 @@ using Application.Repositories;
 using Domain.Entities;
 using MediatR;
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -13,15 +14,21 @@ namespace Application.Features.Friends.Commands.AddFriend
         private readonly IFriendshipRepository _friendshipRepository;
         private readonly IUserRepository _userRepository;
         private readonly IUserContextService _userContextService;
+        private readonly IDmChannelService _dmChannelService;
+        private readonly IUserBlockRepository _blockRepository;
 
         public AddFriendCommandHandler(
             IFriendshipRepository friendshipRepository,
             IUserRepository userRepository,
-            IUserContextService userContextService)
+            IUserContextService userContextService,
+            IDmChannelService dmChannelService,
+            IUserBlockRepository blockRepository)
         {
             _friendshipRepository = friendshipRepository;
             _userRepository = userRepository;
             _userContextService = userContextService;
+            _dmChannelService = dmChannelService;
+            _blockRepository = blockRepository;
         }
 
         public async Task<object> Handle(AddFriendCommand request, CancellationToken cancellationToken)
@@ -45,13 +52,53 @@ namespace Application.Features.Friends.Commands.AddFriend
                 throw new Exception("Kendine arkadaşlık isteği gönderemezsin.");
             }
 
-            var existing = await _friendshipRepository.GetBetweenUsersAsync(currentUserId, target.Id);
-            if (existing != null)
+            if (await _blockRepository.IsBlockedEitherWayAsync(currentUserId, target.Id))
             {
-                throw new Exception(
-                    existing.Status == "Accepted"
-                        ? "Bu kullanıcı zaten arkadaşın."
-                        : "Zaten bekleyen bir istek var.");
+                throw new Exception("Engellenmiş bir kullanıcıya istek gönderemezsiniz.");
+            }
+
+            var existingRows = await _friendshipRepository.GetAllBetweenUsersAsync(
+                currentUserId,
+                target.Id);
+
+            if (existingRows.Any(f => f.Status == "Accepted"))
+            {
+                throw new Exception("Bu kullanıcı zaten arkadaşın.");
+            }
+
+            // Karşı taraf zaten istek göndermişse otomatik kabul et.
+            var incoming = existingRows.FirstOrDefault(f =>
+                f.Status == "Pending" && f.AddresseeId == currentUserId);
+            if (incoming != null)
+            {
+                incoming.Status = "Accepted";
+                await _friendshipRepository.UpdateAsync(incoming);
+                await _friendshipRepository.DeleteOtherPendingBetweenAsync(
+                    incoming.RequesterId,
+                    incoming.AddresseeId,
+                    incoming.Id);
+
+                var dmChannel = await _dmChannelService.FindOrCreateDmAsync(
+                    incoming.RequesterId,
+                    incoming.AddresseeId,
+                    seedGreeting: true,
+                    greetingFromUserId: currentUserId);
+
+                return new
+                {
+                    incoming.Id,
+                    incoming.RequesterId,
+                    incoming.AddresseeId,
+                    Status = "Accepted",
+                    Username = target.Username,
+                    DmChannelId = dmChannel.Id,
+                    AutoAccepted = true
+                };
+            }
+
+            if (existingRows.Any(f => f.Status == "Pending" && f.RequesterId == currentUserId))
+            {
+                throw new Exception("Zaten bekleyen bir istek var.");
             }
 
             var friendship = new Friendship
@@ -71,7 +118,8 @@ namespace Application.Features.Friends.Commands.AddFriend
                 friendship.RequesterId,
                 friendship.AddresseeId,
                 friendship.Status,
-                Username = target.Username
+                Username = target.Username,
+                AutoAccepted = false
             };
         }
     }

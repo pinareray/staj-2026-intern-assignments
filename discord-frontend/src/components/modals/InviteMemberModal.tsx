@@ -35,29 +35,52 @@ export default function InviteMemberModal({
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<UserSearchHit[]>([]);
   const [memberIds, setMemberIds] = useState<Set<string>>(new Set());
+  const [pendingByUserId, setPendingByUserId] = useState<Map<string, string>>(
+    new Map()
+  );
   const [searching, setSearching] = useState(false);
   const [actionUserId, setActionUserId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const loadMembers = useCallback(async () => {
+  const loadMembersAndInvites = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token) return;
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/servers/${serverId}/members`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (!response.ok) return;
+      const [membersRes, invitesRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/servers/${serverId}/members`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`${API_BASE_URL}/api/servers/${serverId}/invites`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
 
-      const data = await response.json();
-      const list = Array.isArray(data) ? data : [];
-      setMemberIds(
-        new Set(
-          list.map((m: Record<string, unknown>) => String(m.userId ?? m.UserId))
-        )
-      );
+      if (membersRes.ok) {
+        const data = await membersRes.json();
+        const list = Array.isArray(data) ? data : [];
+        setMemberIds(
+          new Set(
+            list.map((m: Record<string, unknown>) =>
+              String(m.userId ?? m.UserId)
+            )
+          )
+        );
+      }
+
+      if (invitesRes.ok) {
+        const data = await invitesRes.json();
+        const list = Array.isArray(data) ? data : [];
+        const map = new Map<string, string>();
+        list.forEach((i: Record<string, unknown>) => {
+          map.set(
+            String(i.userId ?? i.UserId),
+            String(i.inviteId ?? i.InviteId)
+          );
+        });
+        setPendingByUserId(map);
+      }
     } catch {
       // ignore
     }
@@ -87,8 +110,8 @@ export default function InviteMemberModal({
     setError("");
     setSearching(false);
     setActionUserId(null);
-    void loadMembers();
-  }, [isOpen, loadMembers]);
+    void loadMembersAndInvites();
+  }, [isOpen, loadMembersAndInvites]);
 
   useEffect(() => {
     return () => {
@@ -101,15 +124,21 @@ export default function InviteMemberModal({
     if (!token) return;
 
     const isMember = memberIds.has(user.id);
+    const pendingInviteId = pendingByUserId.get(user.id);
     setActionUserId(user.id);
     setError("");
 
     try {
       if (isMember) {
+        setError("Bu kullanıcı zaten sunucu üyesi.");
+        return;
+      }
+
+      if (pendingInviteId) {
         const response = await fetch(
-          `${API_BASE_URL}/api/servers/${serverId}/members/${user.id}`,
+          `${API_BASE_URL}/api/servers/invites/${pendingInviteId}/reject`,
           {
-            method: "DELETE",
+            method: "POST",
             headers: { Authorization: `Bearer ${token}` },
           }
         );
@@ -118,39 +147,43 @@ export default function InviteMemberModal({
           unknown
         >;
         if (!response.ok) {
-          setError(String(data.message ?? "Davet geri çekilemedi."));
+          setError(String(data.message ?? "Davet iptal edilemedi."));
           return;
         }
 
-        setMemberIds((prev) => {
-          const next = new Set(prev);
+        setPendingByUserId((prev) => {
+          const next = new Map(prev);
           next.delete(user.id);
           return next;
         });
-      } else {
-        const response = await fetch(
-          `${API_BASE_URL}/api/servers/${serverId}/members`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ username: user.username }),
-          }
-        );
-        const data = (await response.json().catch(() => ({}))) as Record<
-          string,
-          unknown
-        >;
-        if (!response.ok) {
-          setError(String(data.message ?? "Davet edilemedi."));
-          return;
-        }
-
-        setMemberIds((prev) => new Set(prev).add(user.id));
-        onInvited?.();
+        return;
       }
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/servers/${serverId}/members`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ username: user.username }),
+        }
+      );
+      const data = (await response.json().catch(() => ({}))) as Record<
+        string,
+        unknown
+      >;
+      if (!response.ok) {
+        setError(String(data.message ?? "Davet gönderilemedi."));
+        return;
+      }
+
+      const inviteId = String(data.inviteId ?? data.InviteId ?? "");
+      if (inviteId) {
+        setPendingByUserId((prev) => new Map(prev).set(user.id, inviteId));
+      }
+      onInvited?.();
     } catch {
       setError("Sunucuya bağlanılamadı.");
     } finally {
@@ -175,7 +208,7 @@ export default function InviteMemberModal({
         <h2 className="font-libre text-xl text-stone-900">Üye Davet Et</h2>
         <p className="mt-1 font-hanken text-sm text-stone-500">
           <span className="font-semibold text-stone-700">{serverName}</span>{" "}
-          sunucusuna kullanıcı ekle.
+          sunucusuna davet gönder. Kişi kabul edince sunucu listesinde görünür.
         </p>
 
         <div className="mt-5 space-y-4">
@@ -214,7 +247,8 @@ export default function InviteMemberModal({
               )}
               {!searching &&
                 results.map((user) => {
-                  const invited = memberIds.has(user.id);
+                  const isMember = memberIds.has(user.id);
+                  const isPending = pendingByUserId.has(user.id);
                   const busy = actionUserId === user.id;
 
                   return (
@@ -229,27 +263,39 @@ export default function InviteMemberModal({
                         <p className="truncate font-hanken text-sm text-stone-800">
                           @{user.username}
                         </p>
-                        {user.isFriend && (
+                        {isMember ? (
+                          <p className="font-hanken text-[10px] text-stone-500">
+                            Üye
+                          </p>
+                        ) : isPending ? (
+                          <p className="font-hanken text-[10px] text-amber-700">
+                            Davet bekliyor
+                          </p>
+                        ) : user.isFriend ? (
                           <p className="font-hanken text-[10px] text-emerald-700">
                             Arkadaş
                           </p>
-                        )}
+                        ) : null}
                       </div>
                       <button
                         type="button"
-                        disabled={busy}
+                        disabled={busy || isMember}
                         onClick={() => void toggleInvite(user)}
                         className={`shrink-0 rounded-lg px-3 py-1.5 font-hanken text-[11px] font-semibold transition-colors disabled:opacity-60 ${
-                          invited
-                            ? "bg-stone-200 text-stone-700 hover:bg-stone-300"
-                            : "bg-primary-container text-white hover:bg-[#8f1b1c]"
+                          isMember
+                            ? "bg-stone-100 text-stone-400"
+                            : isPending
+                              ? "bg-stone-200 text-stone-700 hover:bg-stone-300"
+                              : "bg-primary-container text-white hover:bg-[#8f1b1c]"
                         }`}
                       >
                         {busy
                           ? "..."
-                          : invited
-                            ? "Davet Edildi"
-                            : "Davet Et"}
+                          : isMember
+                            ? "Üye"
+                            : isPending
+                              ? "İptal"
+                              : "Davet Et"}
                       </button>
                     </div>
                   );

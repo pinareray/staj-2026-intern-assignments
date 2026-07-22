@@ -5,6 +5,7 @@ import ServerSidebar from "@/components/layout/ServerSidebar";
 import ChannelSidebar from "@/components/layout/ChannelSidebar";
 import DmSidebar from "@/components/layout/DmSidebar";
 import ChatArea from "@/components/chat/ChatArea";
+import FriendsList from "@/components/chat/FriendsList";
 import {
   getInitialAppState,
   saveAppNavigation,
@@ -39,6 +40,10 @@ export default function AppShell() {
     loadChannelPanelOpen()
   );
   const [serversRefreshKey, setServersRefreshKey] = useState(0);
+  const [friendsOpen, setFriendsOpen] = useState(false);
+  const [friendsInitialTab, setFriendsInitialTab] = useState<
+    "incoming" | "outgoing" | "friends" | "invites"
+  >("friends");
 
   useEffect(() => {
     saveAppNavigation({
@@ -199,6 +204,10 @@ export default function AppShell() {
         messagesActive={isDmMode}
         totalUnread={totalUnread}
         onMessagesHome={handleMessagesHome}
+        onOpenFriends={() => {
+          setFriendsInitialTab("friends");
+          setFriendsOpen(true);
+        }}
         onServerSelect={(server) => {
           handleServerSelect(server);
           if (typeof window !== "undefined" && window.innerWidth < 768) {
@@ -253,9 +262,20 @@ export default function AppShell() {
         isDmMode={isDmMode}
         sidePanelCollapsed={!sidePanelOpen}
         onExpandSidePanel={expandSidePanel}
+        onIncomingMessage={handleIncomingMessage}
+        onOpenNotifications={() => {
+          setFriendsInitialTab("invites");
+          setFriendsOpen(true);
+        }}
+      />
+
+      <FriendsList
+        isOpen={friendsOpen}
+        onClose={() => setFriendsOpen(false)}
         onOpenDm={handleOpenDm}
         onDmAccepted={() => setDmRefreshKey((k) => k + 1)}
-        onIncomingMessage={handleIncomingMessage}
+        onServersChanged={() => setServersRefreshKey((k) => k + 1)}
+        initialTab={friendsInitialTab}
       />
     </main>
   );

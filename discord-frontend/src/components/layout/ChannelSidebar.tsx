@@ -345,6 +345,7 @@ export default function ChannelSidebar({
           />
           <ChannelSettingsModal
             isOpen={isSettingsOpen}
+            serverId={selectedServer.id}
             serverName={selectedServer.name}
             channels={channels}
             canManage={canManageChannels}

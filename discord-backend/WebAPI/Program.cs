@@ -164,7 +164,70 @@ using (var scope = app.Services.CreateScope())
 
         ALTER TABLE "Messages" ADD COLUMN IF NOT EXISTS "EditedAt" timestamp with time zone;
         ALTER TABLE "Messages" ADD COLUMN IF NOT EXISTS "AttachmentUrl" text;
+        ALTER TABLE "Messages" ADD COLUMN IF NOT EXISTS "IsPinned" boolean NOT NULL DEFAULT false;
+        ALTER TABLE "Messages" ADD COLUMN IF NOT EXISTS "PinnedAt" timestamp with time zone;
+        ALTER TABLE "Messages" ADD COLUMN IF NOT EXISTS "PinnedByUserId" uuid;
+
+        CREATE TABLE IF NOT EXISTS "ServerInvites" (
+            "Id" uuid NOT NULL,
+            "ServerId" uuid NOT NULL,
+            "InviterId" uuid NOT NULL,
+            "InviteeId" uuid NOT NULL,
+            "Status" text NOT NULL,
+            "CreatedAt" timestamp with time zone NOT NULL,
+            CONSTRAINT "PK_ServerInvites" PRIMARY KEY ("Id"),
+            CONSTRAINT "FK_ServerInvites_Servers_ServerId" FOREIGN KEY ("ServerId") REFERENCES "Servers" ("Id") ON DELETE CASCADE,
+            CONSTRAINT "FK_ServerInvites_Users_InviterId" FOREIGN KEY ("InviterId") REFERENCES "Users" ("Id") ON DELETE RESTRICT,
+            CONSTRAINT "FK_ServerInvites_Users_InviteeId" FOREIGN KEY ("InviteeId") REFERENCES "Users" ("Id") ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS "IX_ServerInvites_InviteeId" ON "ServerInvites" ("InviteeId");
+        CREATE INDEX IF NOT EXISTS "IX_ServerInvites_ServerId_InviteeId_Status" ON "ServerInvites" ("ServerId", "InviteeId", "Status");
+
+        ALTER TABLE "Users" ADD COLUMN IF NOT EXISTS "IsPlatformAdmin" boolean NOT NULL DEFAULT false;
+
+        CREATE TABLE IF NOT EXISTS "UserBlocks" (
+            "Id" uuid NOT NULL,
+            "BlockerId" uuid NOT NULL,
+            "BlockedId" uuid NOT NULL,
+            "CreatedAt" timestamp with time zone NOT NULL,
+            CONSTRAINT "PK_UserBlocks" PRIMARY KEY ("Id"),
+            CONSTRAINT "FK_UserBlocks_Users_BlockerId" FOREIGN KEY ("BlockerId") REFERENCES "Users" ("Id") ON DELETE CASCADE,
+            CONSTRAINT "FK_UserBlocks_Users_BlockedId" FOREIGN KEY ("BlockedId") REFERENCES "Users" ("Id") ON DELETE CASCADE
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS "IX_UserBlocks_BlockerId_BlockedId" ON "UserBlocks" ("BlockerId", "BlockedId");
+        CREATE INDEX IF NOT EXISTS "IX_UserBlocks_BlockedId" ON "UserBlocks" ("BlockedId");
+
+        CREATE TABLE IF NOT EXISTS "UserReports" (
+            "Id" uuid NOT NULL,
+            "ReporterId" uuid NOT NULL,
+            "ReportedUserId" uuid NOT NULL,
+            "Reason" text NOT NULL,
+            "Details" text,
+            "Status" text NOT NULL,
+            "CreatedAt" timestamp with time zone NOT NULL,
+            "ReviewedAt" timestamp with time zone,
+            "ReviewedByAdminId" uuid,
+            "AdminNote" text,
+            CONSTRAINT "PK_UserReports" PRIMARY KEY ("Id"),
+            CONSTRAINT "FK_UserReports_Users_ReporterId" FOREIGN KEY ("ReporterId") REFERENCES "Users" ("Id") ON DELETE RESTRICT,
+            CONSTRAINT "FK_UserReports_Users_ReportedUserId" FOREIGN KEY ("ReportedUserId") REFERENCES "Users" ("Id") ON DELETE RESTRICT
+        );
+        CREATE INDEX IF NOT EXISTS "IX_UserReports_Status" ON "UserReports" ("Status");
+        CREATE INDEX IF NOT EXISTS "IX_UserReports_ReportedUserId" ON "UserReports" ("ReportedUserId");
         """);
+
+    // Platform admin e-postaları (virgülle ayrılmış) — appsettings: PlatformAdminEmails
+    var adminEmails = app.Configuration["PlatformAdminEmails"];
+    if (!string.IsNullOrWhiteSpace(adminEmails))
+    {
+        foreach (var raw in adminEmails.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var email = raw.ToLowerInvariant();
+            db.Database.ExecuteSqlRaw(
+                """UPDATE "Users" SET "IsPlatformAdmin" = true WHERE lower("Email") = {0}""",
+                email);
+        }
+    }
 }
 
 if (app.Environment.IsDevelopment())

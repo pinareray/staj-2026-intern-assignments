@@ -18,6 +18,9 @@ namespace Persistence.Contexts
         public DbSet<Friendship> Friendships { get; set; }
         public DbSet<ChannelMember> ChannelMembers { get; set; }
         public DbSet<StarredMessage> StarredMessages { get; set; }
+        public DbSet<ServerInvite> ServerInvites { get; set; }
+        public DbSet<UserBlock> UserBlocks { get; set; }
+        public DbSet<UserReport> UserReports { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -108,6 +111,27 @@ namespace Persistence.Contexts
                     .OnDelete(DeleteBehavior.Restrict);
             });
 
+            modelBuilder.Entity<ServerInvite>(entity =>
+            {
+                entity.HasIndex(i => new { i.ServerId, i.InviteeId, i.Status });
+                entity.HasIndex(i => i.InviteeId);
+
+                entity.HasOne<Server>()
+                    .WithMany()
+                    .HasForeignKey(i => i.ServerId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne<User>()
+                    .WithMany()
+                    .HasForeignKey(i => i.InviterId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne<User>()
+                    .WithMany()
+                    .HasForeignKey(i => i.InviteeId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
             modelBuilder.Entity<StarredMessage>(entity =>
             {
                 entity.HasIndex(s => new { s.UserId, s.MessageId }).IsUnique();
@@ -122,6 +146,38 @@ namespace Persistence.Contexts
                     .WithMany()
                     .HasForeignKey(s => s.MessageId)
                     .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<UserBlock>(entity =>
+            {
+                entity.HasIndex(b => new { b.BlockerId, b.BlockedId }).IsUnique();
+                entity.HasIndex(b => b.BlockedId);
+
+                entity.HasOne<User>()
+                    .WithMany()
+                    .HasForeignKey(b => b.BlockerId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne<User>()
+                    .WithMany()
+                    .HasForeignKey(b => b.BlockedId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<UserReport>(entity =>
+            {
+                entity.HasIndex(r => r.Status);
+                entity.HasIndex(r => r.ReportedUserId);
+
+                entity.HasOne<User>()
+                    .WithMany()
+                    .HasForeignKey(r => r.ReporterId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne<User>()
+                    .WithMany()
+                    .HasForeignKey(r => r.ReportedUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
         }
     }

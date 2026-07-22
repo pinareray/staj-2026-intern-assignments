@@ -13,5 +13,6 @@ namespace Application.Features.Messages.Queries.GetMessagesByChannel
         public DateTime? EditedAt { get; set; }
         public string? AttachmentUrl { get; set; }
         public bool IsStarred { get; set; }
+        public bool IsPinned { get; set; }
     }
 }

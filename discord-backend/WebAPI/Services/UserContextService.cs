@@ -26,5 +26,12 @@ namespace WebAPI.Services
 
             return userId;
         }
+
+        public bool IsPlatformAdmin()
+        {
+            var role = _httpContextAccessor.HttpContext?.User
+                ?.FindFirst(ClaimTypes.Role)?.Value;
+            return string.Equals(role, "PlatformAdmin", StringComparison.OrdinalIgnoreCase);
+        }
     }
 }

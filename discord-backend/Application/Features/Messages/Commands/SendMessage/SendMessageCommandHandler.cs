@@ -16,19 +16,22 @@ namespace Application.Features.Messages.Commands.SendMessage
         private readonly IChannelRepository _channelRepository;
         private readonly IChannelMemberRepository _channelMemberRepository;
         private readonly IChatNotificationService _chatNotificationService;
+        private readonly IUserBlockRepository _blockRepository;
 
         public SendMessageCommandHandler(
             IMessageRepository messageRepository,
             IUserRepository userRepository,
             IChannelRepository channelRepository,
             IChannelMemberRepository channelMemberRepository,
-            IChatNotificationService chatNotificationService)
+            IChatNotificationService chatNotificationService,
+            IUserBlockRepository blockRepository)
         {
             _messageRepository = messageRepository;
             _userRepository = userRepository;
             _channelRepository = channelRepository;
             _channelMemberRepository = channelMemberRepository;
             _chatNotificationService = chatNotificationService;
+            _blockRepository = blockRepository;
         }
 
         public async Task<object> Handle(SendMessageCommand request, CancellationToken cancellationToken)
@@ -53,6 +56,14 @@ namespace Application.Features.Messages.Commands.SendMessage
                 if (!isMember)
                 {
                     throw new Exception("Bu DM kanalına mesaj gönderme yetkiniz yok.");
+                }
+
+                var members = await _channelMemberRepository.GetByChannelIdAsync(request.ChannelId);
+                var peer = members.Find(m => m.UserId != request.UserId);
+                if (peer != null &&
+                    await _blockRepository.IsBlockedEitherWayAsync(request.UserId, peer.UserId))
+                {
+                    throw new Exception("Engellenmiş bir kullanıcıyla mesajlaşamazsınız.");
                 }
             }
 

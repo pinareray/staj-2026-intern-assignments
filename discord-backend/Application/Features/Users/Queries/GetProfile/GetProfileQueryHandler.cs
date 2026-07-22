@@ -48,7 +48,8 @@ namespace Application.Features.Users.Queries.GetProfile
                 Bio = user.Bio,
                 Status = user.Status,
                 FriendCount = friends.Count,
-                ServerCount = servers.Count
+                ServerCount = servers.Count,
+                IsPlatformAdmin = user.IsPlatformAdmin
             };
         }
     }
