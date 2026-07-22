@@ -13,7 +13,7 @@ import {
   getAuthErrorMessage,
   validateEmail,
 } from "@/lib/authValidation";
-import { cacheCurrentUserProfile } from "@/lib/api";
+import { cacheCurrentUserProfile } from "@/services";
 
 const API_BASE_URL = "http://localhost:5243";
 

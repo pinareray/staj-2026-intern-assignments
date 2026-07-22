@@ -17,6 +17,13 @@ namespace Application.Features.Users.Queries.GetUserByUsername
         public bool IsOwnProfile { get; set; }
         public string? Email { get; set; }
         public List<PublicServerDto> Servers { get; set; } = new();
+        public List<PublicFriendDto> Friends { get; set; } = new();
+    }
+
+    public class PublicFriendDto
+    {
+        public Guid UserId { get; set; }
+        public string Username { get; set; } = string.Empty;
     }
 
     public class PublicServerDto

@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { API_BASE_URL, cacheCurrentUserProfile } from "@/lib/api";
-import type { ChannelItem } from "@/types/chat";
+import { API_BASE_URL, cacheCurrentUserProfile, markDmRead } from "@/services";
+import { chatHub } from "@/services";
+import type { ChannelItem } from "@/models";
 
 export type DmListItem = {
   channelId: string | null;
@@ -11,12 +12,15 @@ export type DmListItem = {
   username: string;
   lastMessage?: string | null;
   lastMessageAt?: string | null;
+  unreadCount?: number;
 };
 
 type DmSidebarProps = {
   selectedChannelId: string | null;
   onDmSelect: (channel: ChannelItem) => void;
   refreshKey?: number;
+  onUnreadTotalChange?: (total: number) => void;
+  onCollapse?: () => void;
 };
 
 function Avatar({ name }: { name: string }) {
@@ -40,6 +44,7 @@ function mapDmRow(d: Record<string, unknown>): DmListItem {
     username: String(d.username ?? d.Username ?? ""),
     lastMessage: (d.lastMessage ?? d.LastMessage ?? null) as string | null,
     lastMessageAt: (d.lastMessageAt ?? d.LastMessageAt ?? null) as string | null,
+    unreadCount: Number(d.unreadCount ?? d.UnreadCount ?? 0),
   };
 }
 
@@ -47,6 +52,8 @@ export default function DmSidebar({
   selectedChannelId,
   onDmSelect,
   refreshKey = 0,
+  onUnreadTotalChange,
+  onCollapse,
 }: DmSidebarProps) {
   const router = useRouter();
   const [dms, setDms] = useState<DmListItem[]>([]);
@@ -69,22 +76,26 @@ export default function DmSidebar({
   }, []);
 
   const loadFriendsFallback = useCallback(async (token: string) => {
-    const response = await fetch(`${API_BASE_URL}/api/friends`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!response.ok) return [];
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/friends`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) return [];
 
-    const data = await response.json();
-    const list = Array.isArray(data) ? data : [];
-    return list
-      .filter((f: Record<string, unknown>) => String(f.status ?? f.Status) === "Accepted")
-      .map((f: Record<string, unknown>) => ({
-        channelId: null,
-        userId: String(f.userId ?? f.UserId),
-        username: String(f.username ?? f.Username ?? ""),
-        lastMessage: null,
-        lastMessageAt: null,
-      }));
+      const data = await response.json();
+      const list = Array.isArray(data) ? data : [];
+      return list
+        .filter((f: Record<string, unknown>) => String(f.status ?? f.Status) === "Accepted")
+        .map((f: Record<string, unknown>) => ({
+          channelId: null,
+          userId: String(f.userId ?? f.UserId),
+          username: String(f.username ?? f.Username ?? ""),
+          lastMessage: null,
+          lastMessageAt: null,
+        }));
+    } catch {
+      return [];
+    }
   }, []);
 
   const loadDms = useCallback(async () => {
@@ -118,21 +129,39 @@ export default function DmSidebar({
 
       const data = await response.json();
       const list = Array.isArray(data) ? data : [];
-      setDms(list.map((d: Record<string, unknown>) => mapDmRow(d)));
+      const mapped = list.map((d: Record<string, unknown>) => mapDmRow(d));
+      setDms(mapped);
+      onUnreadTotalChange?.(
+        mapped.reduce((sum, dm) => sum + (dm.unreadCount ?? 0), 0)
+      );
     } catch {
       const token = localStorage.getItem("token");
       if (token) {
         const friends = await loadFriendsFallback(token);
         setDms(friends);
+      } else {
+        setDms([]);
       }
     } finally {
       setLoading(false);
     }
-  }, [router, loadFriendsFallback]);
+  }, [router, loadFriendsFallback, onUnreadTotalChange]);
 
   useEffect(() => {
     void loadDms();
   }, [loadDms, refreshKey]);
+
+  useEffect(() => {
+    const unsub = chatHub.subscribe("DmUnreadUpdated", () => {
+      void loadDms();
+    });
+    return unsub;
+  }, [loadDms]);
+
+  useEffect(() => {
+    if (!selectedChannelId) return;
+    void markDmRead(selectedChannelId).then(() => loadDms());
+  }, [selectedChannelId, loadDms]);
 
   const openConversation = async (dm: DmListItem) => {
     const token = localStorage.getItem("token");
@@ -142,12 +171,14 @@ export default function DmSidebar({
     }
 
     if (dm.channelId) {
+      await markDmRead(dm.channelId);
       onDmSelect({
         id: dm.channelId,
         name: dm.username,
         serverId: null,
         type: "DM",
       });
+      void loadDms();
       return;
     }
 
@@ -172,6 +203,7 @@ export default function DmSidebar({
         serverId: null,
         type: "DM",
       });
+      await markDmRead(channelId);
       void loadDms();
     } finally {
       setOpeningId(null);
@@ -180,8 +212,16 @@ export default function DmSidebar({
 
   return (
     <aside className="w-64 flex flex-col border-r border-stone-200 bg-surface-container-low shrink-0">
-      <div className="h-16 px-4 flex items-center border-b border-stone-200">
+      <div className="h-16 px-4 flex items-center justify-between border-b border-stone-200">
         <h2 className="font-libre text-lg text-stone-900">Mesajlar</h2>
+        <button
+          type="button"
+          title="Mesaj panelini gizle"
+          onClick={onCollapse}
+          className="rounded-lg p-1.5 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700"
+        >
+          <span className="material-symbols-outlined text-xl">expand_more</span>
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-1">
@@ -200,6 +240,7 @@ export default function DmSidebar({
         {dms.map((dm) => {
           const isActive = dm.channelId != null && selectedChannelId === dm.channelId;
           const isOpening = openingId === dm.userId;
+          const unread = dm.unreadCount ?? 0;
 
           return (
             <button
@@ -207,15 +248,21 @@ export default function DmSidebar({
               type="button"
               disabled={isOpening}
               onClick={() => void openConversation(dm)}
-              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors disabled:opacity-60 ${
+              className={`relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors disabled:opacity-60 ${
                 isActive
                   ? "bg-primary-container/15 text-primary-container"
-                  : "hover:bg-white text-stone-700"
+                  : unread > 0
+                    ? "bg-primary-container/5 hover:bg-white text-stone-800"
+                    : "hover:bg-white text-stone-700"
               }`}
             >
               <Avatar name={dm.username} />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-hanken text-sm font-medium">
+                <p
+                  className={`truncate font-hanken text-sm ${
+                    unread > 0 ? "font-bold" : "font-medium"
+                  }`}
+                >
                   @{dm.username}
                 </p>
                 {isOpening ? (
@@ -232,6 +279,11 @@ export default function DmSidebar({
                   </p>
                 )}
               </div>
+              {unread > 0 && (
+                <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary-container px-1.5 font-hanken text-[10px] font-bold text-white">
+                  {unread > 9 ? "9+" : unread}
+                </span>
+              )}
             </button>
           );
         })}

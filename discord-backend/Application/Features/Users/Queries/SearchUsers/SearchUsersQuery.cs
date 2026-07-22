@@ -8,6 +8,7 @@ namespace Application.Features.Users.Queries.SearchUsers
     {
         public Guid Id { get; set; }
         public string Username { get; set; } = string.Empty;
+        public bool IsFriend { get; set; }
     }
 
     public class SearchUsersQuery : IRequest<List<UserSearchResultDto>>

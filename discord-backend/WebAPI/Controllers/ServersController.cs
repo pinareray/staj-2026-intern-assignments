@@ -1,5 +1,8 @@
 using Application.Features.Channels.Queries.GetChannelsByServer;
+using Application.Features.Servers.Commands.AddMember;
 using Application.Features.Servers.Commands.CreateServer;
+using Application.Features.Servers.Commands.RemoveMember;
+using Application.Features.Servers.Queries.GetServerMembers;
 using Application.Features.Servers.Queries.GetServers;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -49,5 +52,63 @@ namespace WebAPI.Controllers
 
             return Ok(server);
         }
+
+        [HttpGet("{serverId:guid}/members")]
+        public async Task<IActionResult> GetMembers(Guid serverId)
+        {
+            try
+            {
+                var result = await _mediator.Send(new GetServerMembersQuery
+                {
+                    ServerId = serverId
+                });
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("{serverId:guid}/members")]
+        public async Task<IActionResult> AddMember(Guid serverId, [FromBody] AddServerMemberDto dto)
+        {
+            try
+            {
+                var result = await _mediator.Send(new AddServerMemberCommand
+                {
+                    ServerId = serverId,
+                    Username = dto.Username
+                });
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpDelete("{serverId:guid}/members/{userId:guid}")]
+        public async Task<IActionResult> RemoveMember(Guid serverId, Guid userId)
+        {
+            try
+            {
+                var result = await _mediator.Send(new RemoveServerMemberCommand
+                {
+                    ServerId = serverId,
+                    UserId = userId
+                });
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+    }
+
+    public class AddServerMemberDto
+    {
+        public string Username { get; set; }
     }
 }

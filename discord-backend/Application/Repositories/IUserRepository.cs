@@ -21,5 +21,6 @@ namespace Application.Repositories
         Task AddAsync(User user);
         Task<User?> GetByResetTokenAsync(string resetToken);
         Task UpdateAsync(User user);
+        Task DeleteUserAsync(Guid userId);
     }
 }

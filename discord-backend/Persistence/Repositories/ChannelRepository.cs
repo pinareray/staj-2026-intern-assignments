@@ -63,5 +63,17 @@ namespace Persistence.Repositories
             await _context.Channels.AddAsync(channel);
             await _context.SaveChangesAsync();
         }
+
+        public async Task DeleteAsync(Guid id)
+        {
+            var channel = await _context.Channels.FindAsync(id);
+            if (channel == null)
+            {
+                return;
+            }
+
+            _context.Channels.Remove(channel);
+            await _context.SaveChangesAsync();
+        }
     }
 }

@@ -3,6 +3,7 @@ using Application.Repositories;
 using Domain.Entities;
 using MediatR;
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -79,6 +80,21 @@ namespace Application.Features.Messages.Commands.SendMessage
             await _chatNotificationService.SendMessageToChannelAsync(
                 request.ChannelId.ToString(),
                 payload);
+
+            if (channel.Type == "DM")
+            {
+                var members = await _channelMemberRepository.GetByChannelIdAsync(request.ChannelId);
+                foreach (var member in members.Where(m => m.UserId != request.UserId))
+                {
+                    await _chatNotificationService.NotifyDmUnreadAsync(
+                        member.UserId,
+                        new
+                        {
+                            channelId = request.ChannelId,
+                            messageId = message.Id
+                        });
+                }
+            }
 
             return payload;
         }

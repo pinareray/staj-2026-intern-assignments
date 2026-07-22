@@ -1,4 +1,5 @@
 using Application.Features.Channels.Commands.CreateChannel;
+using Application.Features.Channels.Commands.DeleteChannel;
 using Application.Features.Channels.Queries.GetChannelsByServer;
 using Application.Features.Messages.Queries.GetMessagesByChannel;
 using MediatR;
@@ -54,6 +55,17 @@ namespace WebAPI.Controllers
             });
 
             return Ok(channel);
+        }
+
+        [HttpDelete("{channelId:guid}")]
+        public async Task<IActionResult> DeleteChannel(Guid channelId)
+        {
+            var result = await _mediator.Send(new DeleteChannelCommand
+            {
+                ChannelId = channelId
+            });
+
+            return Ok(result);
         }
     }
 }

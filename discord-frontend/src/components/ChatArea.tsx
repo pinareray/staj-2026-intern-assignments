@@ -9,15 +9,10 @@ import {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
-import {
-  HubConnection,
-  HubConnectionBuilder,
-  HubConnectionState,
-  LogLevel,
-} from "@microsoft/signalr";
 import FriendsList from "@/components/FriendsList";
-import { API_BASE_URL } from "@/lib/api";
-import type { ChannelItem, ChatMessage } from "@/types/chat";
+import { API_BASE_URL, fetchDmPeerReadAt, markDmRead } from "@/services";
+import { chatHub } from "@/services";
+import type { ChannelItem, ChatMessage } from "@/models";
 
 type ChatAreaProps = {
   selectedChannel: ChannelItem | null;
@@ -25,8 +20,11 @@ type ChatAreaProps = {
   channelsReady?: boolean;
   channelsEmpty?: boolean;
   isDmMode?: boolean;
+  sidePanelCollapsed?: boolean;
+  onExpandSidePanel?: () => void;
   onOpenDm?: (channel: ChannelItem) => void;
   onDmAccepted?: () => void;
+  onIncomingMessage?: () => void;
 };
 
 function mapMessage(
@@ -46,14 +44,38 @@ function mapMessage(
   };
 }
 
+function getReadReceiptMessageId(
+  messageList: ChatMessage[],
+  userId: string | null,
+  peerLastReadAt: string | null
+): string | null {
+  if (!userId || !peerLastReadAt) return null;
+
+  const readTime = new Date(peerLastReadAt).getTime();
+  if (Number.isNaN(readTime)) return null;
+
+  let lastId: string | null = null;
+  for (const message of messageList) {
+    if (message.userId !== userId) continue;
+    const created = new Date(message.createdAt).getTime();
+    if (!Number.isNaN(created) && created <= readTime) {
+      lastId = message.id;
+    }
+  }
+  return lastId;
+}
+
 export default function ChatArea({
   selectedChannel,
   hasServer = false,
   channelsReady = false,
   channelsEmpty = false,
   isDmMode = false,
+  sidePanelCollapsed = false,
+  onExpandSidePanel,
   onOpenDm,
   onDmAccepted,
+  onIncomingMessage,
 }: ChatAreaProps) {
   const router = useRouter();
   const selectedChannelId = selectedChannel?.id ?? null;
@@ -63,17 +85,33 @@ export default function ChatArea({
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState("");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [currentUsername, setCurrentUsername] = useState("Sen");
+  const [currentUsername, setCurrentUsername] = useState(() => {
+    if (typeof window === "undefined") return "Sen";
+    return localStorage.getItem("username") || "Sen";
+  });
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [authorFilter, setAuthorFilter] = useState("");
   const [starredOnly, setStarredOnly] = useState(false);
+  const [typingUser, setTypingUser] = useState<string | null>(null);
+  const [peerLastReadAt, setPeerLastReadAt] = useState<string | null>(null);
 
-  const connectionRef = useRef<HubConnection | null>(null);
-  const joinedChannelRef = useRef<string | null>(null);
   const selectedChannelIdRef = useRef<string | null>(null);
+  const selectedChannelTypeRef = useRef<string | null>(null);
+  const onIncomingMessageRef = useRef(onIncomingMessage);
+  const currentUsernameRef = useRef(currentUsername);
+  const currentUserIdRef = useRef(currentUserId);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypingSentRef = useRef(0);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const isNearBottomRef = useRef(true);
+  const shouldAutoScrollRef = useRef(false);
   selectedChannelIdRef.current = selectedChannelId;
+  selectedChannelTypeRef.current = selectedChannel?.type ?? null;
+  onIncomingMessageRef.current = onIncomingMessage;
+  currentUsernameRef.current = currentUsername;
+  currentUserIdRef.current = currentUserId;
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -116,109 +154,123 @@ export default function ChatArea({
     void loadMe();
   }, []);
 
-  // SignalR bağlantısı (tek sefer)
+  // SignalR — singleton bağlantı (Strict Mode remount'ta kopmaz)
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) return;
 
-    const connection = new HubConnectionBuilder()
-      .withUrl("http://localhost:5243/chatHub", {
-        accessTokenFactory: () => localStorage.getItem("token") ?? "",
-      })
-      .withAutomaticReconnect()
-      .configureLogging(LogLevel.Warning)
-      .build();
+    const unsubMessage = chatHub.subscribe("ReceiveMessage", (raw) => {
+      const message = mapMessage(raw as Record<string, unknown>);
+      const currentId = selectedChannelIdRef.current;
 
-    connection.on("ReceiveMessage", (raw: Record<string, unknown>) => {
-      const message = mapMessage(raw);
-      if (
-        selectedChannelIdRef.current &&
-        message.channelId !== selectedChannelIdRef.current
-      ) {
+      if (currentId && message.channelId === currentId) {
+        if (isNearBottomRef.current) {
+          shouldAutoScrollRef.current = true;
+        }
+        setTypingUser((prev) =>
+          prev && prev === message.username ? null : prev
+        );
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === message.id)) return prev;
+          return [...prev, message];
+        });
+        if (selectedChannelTypeRef.current === "DM") {
+          void markDmRead(message.channelId).then(() =>
+            onIncomingMessageRef.current?.()
+          );
+        }
         return;
       }
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === message.id)) return prev;
-        return [...prev, message];
-      });
+
+      onIncomingMessageRef.current?.();
     });
 
-    connection
-      .start()
-      .then(async () => {
-        connectionRef.current = connection;
-        if (joinedChannelRef.current == null && selectedChannelId) {
-          try {
-            await connection.invoke("JoinChannel", selectedChannelId);
-            joinedChannelRef.current = selectedChannelId;
-          } catch {
-            // ignore
-          }
-        }
-      })
-      .catch(() => {
-        connectionRef.current = null;
-      });
+    const unsubTyping = chatHub.subscribe("UserTyping", (raw) => {
+      const payload = raw as Record<string, unknown>;
+      const channelId = String(payload.channelId ?? payload.ChannelId ?? "");
+      const username = String(payload.username ?? payload.Username ?? "");
+      if (!channelId || channelId !== selectedChannelIdRef.current) return;
+      if (username === currentUsernameRef.current) return;
+
+      setTypingUser(username);
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => setTypingUser(null), 3000);
+    });
+
+    const unsubRead = chatHub.subscribe("ReadReceipt", (raw) => {
+      const payload = raw as Record<string, unknown>;
+      const channelId = String(payload.channelId ?? payload.ChannelId ?? "");
+      const readerId = String(payload.userId ?? payload.UserId ?? "");
+      const readAt = payload.readAt ?? payload.ReadAt;
+      if (!channelId || channelId !== selectedChannelIdRef.current) return;
+      if (readerId === currentUserIdRef.current) return;
+      if (readAt) setPeerLastReadAt(String(readAt));
+    });
+
+    void chatHub.connect();
 
     return () => {
-      void connection.stop();
-      connectionRef.current = null;
-      joinedChannelRef.current = null;
+      unsubMessage();
+      unsubTyping();
+      unsubRead();
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Kanal değişince Join / Leave — bağlantı hazır olunca da yeniden dene
+  // Kanal değişince gruba katıl
   useEffect(() => {
-    let cancelled = false;
+    if (!selectedChannelId) return;
 
-    const switchChannel = async () => {
-      const connection = connectionRef.current;
-      if (!connection) return;
+    void chatHub.joinChannel(selectedChannelId);
 
-      // Bağlantı henüz kurulmadıysa kısa bekleyip tekrar dene
-      if ((connection.state as HubConnectionState) !== HubConnectionState.Connected) {
-        await new Promise((r) => setTimeout(r, 400));
-        if (
-          cancelled ||
-          (connection.state as HubConnectionState) !== HubConnectionState.Connected
-        ) {
-          return;
-        }
-      }
-
-      const previous = joinedChannelRef.current;
-      if (previous && previous !== selectedChannelId) {
-        try {
-          await connection.invoke("LeaveChannel", previous);
-        } catch {
-          // ignore
-        }
-      }
-
-      if (selectedChannelId) {
-        try {
-          await connection.invoke("JoinChannel", selectedChannelId);
-          joinedChannelRef.current = selectedChannelId;
-        } catch {
-          // ignore
-        }
-      } else {
-        joinedChannelRef.current = null;
-      }
-    };
-
-    void switchChannel();
     return () => {
-      cancelled = true;
+      void chatHub.leaveChannel(selectedChannelId);
     };
   }, [selectedChannelId]);
+
+  useEffect(() => {
+    setTypingUser(null);
+    setPeerLastReadAt(null);
+    shouldAutoScrollRef.current = true;
+    isNearBottomRef.current = true;
+  }, [selectedChannelId]);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const distance =
+        container.scrollHeight - container.scrollTop - container.clientHeight;
+      isNearBottomRef.current = distance < 120;
+    };
+
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, [selectedChannelId]);
+
+  const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    container.scrollTo({ top: container.scrollHeight, behavior });
+  };
+
+  useEffect(() => {
+    if (!selectedChannel || loading) return;
+    if (!shouldAutoScrollRef.current && !isNearBottomRef.current) return;
+
+    requestAnimationFrame(() => {
+      scrollToBottom(shouldAutoScrollRef.current ? "auto" : "smooth");
+      shouldAutoScrollRef.current = false;
+    });
+  }, [messages, loading, selectedChannel]);
 
   // Geçmiş mesajlar
   useEffect(() => {
     const loadMessages = async () => {
       if (!selectedChannelId) {
         setMessages([]);
+        setPeerLastReadAt(null);
         return;
       }
 
@@ -228,19 +280,23 @@ export default function ChatArea({
         return;
       }
 
+      setMessages([]);
+      setPeerLastReadAt(null);
       setLoading(true);
       try {
-        const response = await fetch(
-          `${API_BASE_URL}/api/messages/${selectedChannelId}`,
-          {
+        const [messagesResponse, peerReadAt] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/messages/${selectedChannelId}`, {
             headers: {
               Authorization: `Bearer ${token}`,
             },
-          }
-        );
+          }),
+          selectedChannel?.type === "DM"
+            ? fetchDmPeerReadAt(selectedChannelId)
+            : Promise.resolve(null),
+        ]);
 
-        if (!response.ok) {
-          if (response.status === 401 || response.status === 403) {
+        if (!messagesResponse.ok) {
+          if (messagesResponse.status === 401 || messagesResponse.status === 403) {
             localStorage.removeItem("token");
             router.push("/login");
           }
@@ -248,9 +304,19 @@ export default function ChatArea({
           return;
         }
 
-        const data = await response.json();
+        const data = await messagesResponse.json();
         const list = Array.isArray(data) ? data : [];
-        setMessages(list.map((m: Record<string, unknown>) => mapMessage(m, selectedChannelId)));
+        setMessages(
+          list.map((m: Record<string, unknown>) => mapMessage(m, selectedChannelId))
+        );
+        setPeerLastReadAt(peerReadAt);
+        shouldAutoScrollRef.current = true;
+
+        if (selectedChannel?.type === "DM") {
+          void markDmRead(selectedChannelId).then(() =>
+            onIncomingMessageRef.current?.()
+          );
+        }
       } catch {
         setMessages([]);
       } finally {
@@ -263,7 +329,7 @@ export default function ChatArea({
     setAuthorFilter("");
     setStarredOnly(false);
     loadMessages();
-  }, [selectedChannelId, router]);
+  }, [selectedChannelId, selectedChannel?.type, router]);
 
   const formatTime = (value: string) => {
     const date = new Date(value);
@@ -289,6 +355,14 @@ export default function ChatArea({
   const uniqueAuthors = useMemo(
     () => [...new Set(messages.map((m) => m.username))].sort(),
     [messages]
+  );
+
+  const readReceiptMessageId = useMemo(
+    () =>
+      selectedChannel?.type === "DM"
+        ? getReadReceiptMessageId(messages, currentUserId, peerLastReadAt)
+        : null,
+    [messages, currentUserId, peerLastReadAt, selectedChannel?.type]
   );
 
   const highlightContent = (content: string) => {
@@ -355,7 +429,7 @@ export default function ChatArea({
 
     setSending(true);
     try {
-      const response = await fetch("http://localhost:5243/api/messages", {
+      const response = await fetch(`${API_BASE_URL}/api/messages`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -392,19 +466,9 @@ export default function ChatArea({
         if (prev.some((m) => m.id === created.id)) return prev;
         return [...prev, created];
       });
+      shouldAutoScrollRef.current = true;
       setDraft("");
-
-      const connection = connectionRef.current;
-      if (
-        connection &&
-        (connection.state as HubConnectionState) === HubConnectionState.Connected
-      ) {
-        try {
-          await connection.invoke("SendMessage", selectedChannelId, created);
-        } catch {
-          // REST zaten broadcast yapıyor olabilir
-        }
-      }
+      setTypingUser(null);
     } catch {
       // ağ hatası
     } finally {
@@ -415,6 +479,19 @@ export default function ChatArea({
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     void handleSend();
+  };
+
+  const handleDraftChange = (value: string) => {
+    setDraft(value);
+    if (!selectedChannelId) return;
+
+    if (!value.trim()) return;
+
+    const now = Date.now();
+    if (now - lastTypingSentRef.current < 1200) return;
+
+    lastTypingSentRef.current = now;
+    void chatHub.invoke("SendTyping", selectedChannelId);
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -428,6 +505,16 @@ export default function ChatArea({
     <main className="flex-1 flex flex-col overflow-hidden relative bg-background">
       <header className="h-16 px-6 flex items-center justify-between border-b border-stone-200 z-10 bg-white">
         <div className="flex items-center gap-3">
+          {sidePanelCollapsed && onExpandSidePanel && (
+            <button
+              type="button"
+              title={isDmMode ? "Mesajları göster" : "Kanalları göster"}
+              onClick={onExpandSidePanel}
+              className="rounded-lg p-1.5 text-stone-400 transition-colors hover:bg-stone-100 hover:text-primary-container"
+            >
+              <span className="material-symbols-outlined">chevron_right</span>
+            </button>
+          )}
           <span
             className="material-symbols-outlined text-primary-container"
             style={{ fontVariationSettings: "'FILL' 1" }}
@@ -448,18 +535,24 @@ export default function ChatArea({
                       ? "Kanal oluşturarak ilk adımı atın"
                       : "Bir kanal seçerek sohbete başlayın"}
             </h2>
-            <p className="text-xs text-stone-400 font-hanken">
-              {selectedChannel
-                ? selectedChannel.type === "DM"
-                  ? "Özel mesaj"
-                  : `#${selectedChannel.name} sohbet kanalı`
-                : isDmMode
-                  ? "Soldan bir arkadaş sohbeti seç"
-                  : hasServer && !channelsReady
-                    ? "Biraz bekleyin"
-                    : hasServer && channelsEmpty
-                      ? "Soldan “Kanal Oluştur” ile yeni bir alan açabilirsin"
-                      : "Önce bir sunucu seç, sonra kanal oluştur veya seç"}
+            <p
+              className={`text-xs font-hanken ${
+                typingUser ? "text-primary-container italic" : "text-stone-400"
+              }`}
+            >
+              {typingUser
+                ? `@${typingUser} yazıyor...`
+                : selectedChannel
+                  ? selectedChannel.type === "DM"
+                    ? "Özel mesaj"
+                    : `#${selectedChannel.name} sohbet kanalı`
+                  : isDmMode
+                    ? "Soldan bir arkadaş sohbeti seç"
+                    : hasServer && !channelsReady
+                      ? "Biraz bekleyin"
+                      : hasServer && channelsEmpty
+                        ? "Soldan “Kanal Oluştur” ile yeni bir alan açabilirsin"
+                        : "Önce bir sunucu seç, sonra kanal oluştur veya seç"}
             </p>
           </div>
         </div>
@@ -553,7 +646,10 @@ export default function ChatArea({
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-8 inner-depth space-y-6 bg-gradient-to-br from-white to-[#f7f4ef]">
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto custom-scrollbar px-6 py-8 inner-depth space-y-6 bg-gradient-to-br from-white to-[#f7f4ef]"
+      >
         {!selectedChannel && isDmMode && (
           <p className="text-center text-sm text-stone-400 font-hanken pt-10 w-full max-w-md mx-auto leading-relaxed">
             Soldan bir arkadaş sohbeti seç — ya da Arkadaşlar listesinden Mesaj
@@ -600,9 +696,14 @@ export default function ChatArea({
         )}
 
         {selectedChannel &&
+          !loading &&
           visibleMessages.map((message) => {
             const isMine =
               currentUserId !== null && message.userId === currentUserId;
+            const showReadReceipt =
+              isMine &&
+              selectedChannel.type === "DM" &&
+              message.id === readReceiptMessageId;
 
             if (isMine) {
               return (
@@ -651,6 +752,11 @@ export default function ChatArea({
                         {highlightContent(message.content)}
                       </p>
                     </div>
+                    {showReadReceipt && (
+                      <p className="pr-1 font-hanken text-[11px] text-stone-400">
+                        Görüldü
+                      </p>
+                    )}
                   </div>
                 </div>
               );
@@ -708,10 +814,16 @@ export default function ChatArea({
           })}
       </div>
 
-      <footer className="p-6 bg-white border-t border-stone-200">
+      <footer className="bg-white border-t border-stone-200">
+        {typingUser && selectedChannel && (
+          <p className="max-w-5xl mx-auto px-6 pt-3 font-hanken text-xs italic text-primary-container">
+            @{typingUser} yazıyor
+            <span className="inline-flex w-4 animate-pulse">...</span>
+          </p>
+        )}
         <form
           onSubmit={handleSubmit}
-          className="max-w-5xl mx-auto flex items-end gap-3 bg-stone-50 rounded-2xl p-2 border border-stone-200 transition-all focus-within:border-primary-container/40"
+          className="max-w-5xl mx-auto flex items-end gap-3 bg-stone-50 rounded-2xl p-2 m-6 border border-stone-200 transition-all focus-within:border-primary-container/40"
         >
           <button
             type="button"
@@ -722,14 +834,12 @@ export default function ChatArea({
           <div className="flex-1">
             <textarea
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => handleDraftChange(e.target.value)}
               onKeyDown={handleKeyDown}
               className="w-full bg-transparent border-none focus:ring-0 text-stone-900 placeholder:text-stone-400 py-2 custom-scrollbar resize-none max-h-32 text-sm outline-none font-hanken"
               placeholder={
                 selectedChannel
-                  ? selectedChannel.type === "DM"
-                    ? `@${selectedChannel.name} kullanıcısına mesaj yaz...`
-                    : `#${selectedChannel.name} kanalına bir mesaj yaz...`
+                  ? "Mesaj yaz..."
                   : isDmMode
                     ? "Önce bir sohbet seç..."
                     : "Önce bir kanal seç..."

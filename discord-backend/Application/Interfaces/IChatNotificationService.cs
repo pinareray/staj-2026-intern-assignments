@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 
 namespace Application.Interfaces
@@ -6,5 +7,7 @@ namespace Application.Interfaces
     public interface IChatNotificationService
     {
         Task SendMessageToChannelAsync(string channelId, object messageData);
+        Task SendReadReceiptAsync(string channelId, object receiptData);
+        Task NotifyDmUnreadAsync(Guid userId, object payload);
     }
 }

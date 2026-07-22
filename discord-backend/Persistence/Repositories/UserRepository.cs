@@ -76,5 +76,46 @@ namespace Persistence.Repositories
             _context.Users.Update(user);
             await _context.SaveChangesAsync();
         }
+
+        public async Task DeleteUserAsync(Guid userId)
+        {
+            var friendships = await _context.Friendships
+                .Where(f => f.RequesterId == userId || f.AddresseeId == userId)
+                .ToListAsync();
+            _context.Friendships.RemoveRange(friendships);
+
+            var starred = await _context.StarredMessages
+                .Where(s => s.UserId == userId)
+                .ToListAsync();
+            _context.StarredMessages.RemoveRange(starred);
+
+            var channelMembers = await _context.ChannelMembers
+                .Where(cm => cm.UserId == userId)
+                .ToListAsync();
+            _context.ChannelMembers.RemoveRange(channelMembers);
+
+            var serverMembers = await _context.ServerMembers
+                .Where(sm => sm.UserId == userId)
+                .ToListAsync();
+            _context.ServerMembers.RemoveRange(serverMembers);
+
+            var messages = await _context.Messages
+                .Where(m => m.UserId == userId)
+                .ToListAsync();
+            _context.Messages.RemoveRange(messages);
+
+            var ownedServers = await _context.Servers
+                .Where(s => s.OwnerId == userId)
+                .ToListAsync();
+            _context.Servers.RemoveRange(ownedServers);
+
+            var user = await _context.Users.FindAsync(userId);
+            if (user != null)
+            {
+                _context.Users.Remove(user);
+            }
+
+            await _context.SaveChangesAsync();
+        }
     }
 }

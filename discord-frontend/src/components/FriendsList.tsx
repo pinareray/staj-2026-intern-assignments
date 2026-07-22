@@ -3,8 +3,8 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { API_BASE_URL } from "@/lib/api";
-import type { ChannelItem } from "@/types/chat";
+import { API_BASE_URL } from "@/services";
+import type { ChannelItem } from "@/models";
 
 type FriendItem = {
   friendshipId: string;

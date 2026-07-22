@@ -3,13 +3,16 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import CreateChannelModal from "@/components/CreateChannelModal";
-import type { ChannelItem, ServerItem } from "@/types/chat";
+import ChannelSettingsModal from "@/components/ChannelSettingsModal";
+import InviteMemberModal from "@/components/InviteMemberModal";
+import type { ChannelItem, ServerItem } from "@/models";
 
 type ChannelSidebarProps = {
   selectedServer: ServerItem | null;
   selectedChannelId: string | null;
   onChannelSelect: (channel: ChannelItem) => void;
   onChannelsLoaded: (channels: ChannelItem[]) => void;
+  onCollapse?: () => void;
 };
 
 export default function ChannelSidebar({
@@ -17,12 +20,15 @@ export default function ChannelSidebar({
   selectedChannelId,
   onChannelSelect,
   onChannelsLoaded,
+  onCollapse,
 }: ChannelSidebarProps) {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [channels, setChannels] = useState<ChannelItem[]>([]);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -121,30 +127,64 @@ export default function ChannelSidebar({
           <h1 className="font-libre text-lg tracking-tight text-stone-900 truncate">
             {selectedServer?.name || "Sunucu Seçilmedi"}
           </h1>
-          <span className="material-symbols-outlined text-stone-400 cursor-pointer hover:text-stone-700">
-            expand_more
-          </span>
+          <div className="flex items-center gap-1">
+            {selectedServer && (
+              <button
+                type="button"
+                title="Üye davet et"
+                onClick={() => setIsInviteOpen(true)}
+                className="rounded-lg p-1.5 text-stone-400 transition-colors hover:bg-stone-100 hover:text-primary-container"
+              >
+                <span className="material-symbols-outlined text-xl">
+                  person_add
+                </span>
+              </button>
+            )}
+            {selectedServer && (
+              <button
+                type="button"
+                title="Kanal panelini gizle"
+                onClick={onCollapse}
+                className="rounded-lg p-1.5 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700"
+              >
+                <span className="material-symbols-outlined text-xl">
+                  expand_more
+                </span>
+              </button>
+            )}
+          </div>
         </header>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar py-3 space-y-6">
           <div className="px-3">
             <div className="flex items-center justify-between px-3 py-1">
               <div className="flex items-center text-stone-400 uppercase tracking-widest text-[10px] font-bold">
-                <span className="material-symbols-outlined text-sm mr-1">
-                  keyboard_arrow_down
-                </span>
                 Kanallar
               </div>
-              {selectedServer && (
-                <button
-                  type="button"
-                  title="Kanal oluştur"
-                  onClick={() => setIsCreateOpen(true)}
-                  className="text-stone-400 hover:text-primary-container transition-colors"
-                >
-                  <span className="material-symbols-outlined text-lg">add</span>
-                </button>
-              )}
+              <div className="flex items-center gap-1">
+                {selectedServer && (
+                  <button
+                    type="button"
+                    title="Kanal ayarları"
+                    onClick={() => setIsSettingsOpen(true)}
+                    className="text-stone-400 hover:text-primary-container transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-lg">
+                      settings
+                    </span>
+                  </button>
+                )}
+                {selectedServer && (
+                  <button
+                    type="button"
+                    title="Kanal oluştur"
+                    onClick={() => setIsCreateOpen(true)}
+                    className="text-stone-400 hover:text-primary-container transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-lg">add</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="mt-2 space-y-1">
@@ -238,12 +278,27 @@ export default function ChannelSidebar({
       </nav>
 
       {selectedServer && (
-        <CreateChannelModal
-          isOpen={isCreateOpen}
-          serverId={selectedServer.id}
-          onClose={() => setIsCreateOpen(false)}
-          onCreated={() => setRefreshKey((k) => k + 1)}
-        />
+        <>
+          <CreateChannelModal
+            isOpen={isCreateOpen}
+            serverId={selectedServer.id}
+            onClose={() => setIsCreateOpen(false)}
+            onCreated={() => setRefreshKey((k) => k + 1)}
+          />
+          <ChannelSettingsModal
+            isOpen={isSettingsOpen}
+            serverName={selectedServer.name}
+            channels={channels}
+            onClose={() => setIsSettingsOpen(false)}
+            onChanged={() => setRefreshKey((k) => k + 1)}
+          />
+          <InviteMemberModal
+            isOpen={isInviteOpen}
+            serverId={selectedServer.id}
+            serverName={selectedServer.name}
+            onClose={() => setIsInviteOpen(false)}
+          />
+        </>
       )}
     </>
   );

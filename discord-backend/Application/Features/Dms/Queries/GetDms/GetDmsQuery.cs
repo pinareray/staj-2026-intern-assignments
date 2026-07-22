@@ -15,5 +15,6 @@ namespace Application.Features.Dms.Queries.GetDms
         public string Username { get; set; } = string.Empty;
         public string? LastMessage { get; set; }
         public DateTime? LastMessageAt { get; set; }
+        public int UnreadCount { get; set; }
     }
 }

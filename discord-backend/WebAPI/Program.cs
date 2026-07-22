@@ -145,6 +145,8 @@ using (var scope = app.Services.CreateScope())
         CREATE UNIQUE INDEX IF NOT EXISTS "IX_ChannelMembers_ChannelId_UserId" ON "ChannelMembers" ("ChannelId", "UserId");
         CREATE INDEX IF NOT EXISTS "IX_ChannelMembers_UserId" ON "ChannelMembers" ("UserId");
 
+        ALTER TABLE "ChannelMembers" ADD COLUMN IF NOT EXISTS "LastReadAt" timestamp with time zone;
+
         ALTER TABLE "Users" ADD COLUMN IF NOT EXISTS "Bio" text;
         ALTER TABLE "Users" ADD COLUMN IF NOT EXISTS "Status" text;
 
@@ -172,7 +174,10 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseCors("ClientCors");
 app.UseAuthentication();

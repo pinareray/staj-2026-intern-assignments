@@ -49,6 +49,22 @@ namespace Application.Features.Users.Queries.GetUserByUsername
             var friends = await _friendshipRepository.GetForUserAsync(user.Id);
             var servers = await _serverRepository.GetByUserIdAsync(user.Id);
 
+            var friendList = new System.Collections.Generic.List<PublicFriendDto>();
+            foreach (var friendship in friends.Where(f => f.Status == "Accepted"))
+            {
+                var friendId = friendship.RequesterId == user.Id
+                    ? friendship.AddresseeId
+                    : friendship.RequesterId;
+                var friendUser = await _userRepository.GetByIdAsync(friendId);
+                if (friendUser == null) continue;
+
+                friendList.Add(new PublicFriendDto
+                {
+                    UserId = friendUser.Id,
+                    Username = friendUser.Username
+                });
+            }
+
             return new PublicProfileDto
             {
                 Id = user.Id,
@@ -57,10 +73,13 @@ namespace Application.Features.Users.Queries.GetUserByUsername
                 AvatarUrl = null,
                 Bio = user.Bio,
                 Status = user.Status,
-                FriendCount = friends.Count,
+                FriendCount = friendList.Count,
                 ServerCount = servers.Count,
                 IsOwnProfile = isOwn,
                 Email = isOwn ? user.Email : null,
+                Friends = friendList
+                    .OrderBy(f => f.Username, System.StringComparer.OrdinalIgnoreCase)
+                    .ToList(),
                 Servers = servers
                     .Take(6)
                     .Select(s => new PublicServerDto

@@ -3,12 +3,17 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { API_BASE_URL, authFetch, logoutToLanding } from "@/lib/api";
+import { API_BASE_URL, authFetch, logoutToLanding } from "@/services";
 
 type PublicServer = {
   id: string;
   name: string;
   iconUrl?: string | null;
+};
+
+type PublicFriend = {
+  userId: string;
+  username: string;
 };
 
 type PublicProfile = {
@@ -23,6 +28,7 @@ type PublicProfile = {
   isOwnProfile: boolean;
   email?: string | null;
   servers: PublicServer[];
+  friends: PublicFriend[];
 };
 
 function bannerGradient(username: string) {
@@ -63,9 +69,14 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"about" | "servers">("about");
+  const [tab, setTab] = useState<"about" | "friends" | "servers" | "settings">(
+    "about"
+  );
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleteError, setDeleteError] = useState("");
   const [editUsername, setEditUsername] = useState("");
   const [editBio, setEditBio] = useState("");
   const [editStatus, setEditStatus] = useState("");
@@ -125,6 +136,12 @@ export default function ProfilePage() {
                 id: String(s.id ?? s.Id),
                 name: String(s.name ?? s.Name ?? "Sunucu"),
                 iconUrl: (s.iconUrl ?? s.IconUrl ?? null) as string | null,
+              }))
+            : [],
+          friends: Array.isArray(data.friends ?? data.Friends)
+            ? (data.friends ?? data.Friends).map((f: Record<string, unknown>) => ({
+                userId: String(f.userId ?? f.UserId),
+                username: String(f.username ?? f.Username ?? ""),
               }))
             : [],
         };
@@ -207,6 +224,45 @@ export default function ProfilePage() {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    if (!profile?.isOwnProfile) return;
+    if (deleteConfirm !== profile.username) {
+      setDeleteError("Onaylamak için kullanıcı adını aynen yaz.");
+      return;
+    }
+
+    setDeleting(true);
+    setDeleteError("");
+
+    try {
+      const response = await authFetch("/api/users/me", { method: "DELETE" });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        setDeleteError(
+          String((data as { message?: string }).message ?? "Hesap silinemedi.")
+        );
+        return;
+      }
+      logoutToLanding();
+    } catch {
+      setDeleteError("Sunucuya bağlanılamadı.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const tabs = useMemo(() => {
+    const items: { id: typeof tab; label: string }[] = [
+      { id: "about", label: "Hakkında" },
+      { id: "friends", label: "Arkadaşlar" },
+      { id: "servers", label: "Sunucular" },
+    ];
+    if (profile?.isOwnProfile) {
+      items.push({ id: "settings", label: "Ayarlar" });
+    }
+    return items;
+  }, [profile?.isOwnProfile]);
+
   return (
     <div className="flex min-h-screen flex-col bg-background text-on-surface">
       <header className="relative z-30 flex h-14 shrink-0 items-center justify-between border-b border-stone-200 bg-white/90 px-4 backdrop-blur-sm sm:h-16 sm:px-6">
@@ -220,14 +276,7 @@ export default function ProfilePage() {
         <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-libre text-lg tracking-tight text-primary-container sm:text-xl">
           micodex
         </span>
-        <button
-          type="button"
-          onClick={() => logoutToLanding()}
-          className="inline-flex items-center gap-1.5 font-hanken text-sm text-stone-500 transition-colors hover:text-primary-container"
-        >
-          <span className="material-symbols-outlined text-lg">logout</span>
-          <span className="hidden sm:inline">Çıkış</span>
-        </button>
+        <div className="w-[88px]" aria-hidden />
       </header>
 
       <main className="relative flex-1 overflow-y-auto px-4 py-8 sm:px-6 sm:py-10">
@@ -315,18 +364,13 @@ export default function ProfilePage() {
 
             {/* Tabs */}
             <div className="border-b border-stone-100 px-6 sm:px-8">
-              <nav className="flex gap-6">
-                {(
-                  [
-                    { id: "about", label: "Hakkında" },
-                    { id: "servers", label: "Sunucular" },
-                  ] as const
-                ).map((item) => (
+              <nav className="flex gap-6 overflow-x-auto custom-scrollbar">
+                {tabs.map((item) => (
                   <button
                     key={item.id}
                     type="button"
                     onClick={() => setTab(item.id)}
-                    className={`border-b-2 pb-3 font-hanken text-sm font-semibold transition-colors ${
+                    className={`shrink-0 border-b-2 pb-3 font-hanken text-sm font-semibold transition-colors ${
                       tab === item.id
                         ? "border-primary-container text-primary-container"
                         : "border-transparent text-stone-400 hover:text-stone-600"
@@ -460,6 +504,40 @@ export default function ProfilePage() {
                 </div>
               )}
 
+              {tab === "friends" && (
+                <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+                  <h3 className="font-hanken text-[10px] font-bold uppercase tracking-widest text-stone-400">
+                    Arkadaşlar ({profile.friends.length})
+                  </h3>
+                  {profile.friends.length === 0 ? (
+                    <p className="mt-3 font-hanken text-sm text-stone-400">
+                      Henüz arkadaş yok.
+                    </p>
+                  ) : (
+                    <ul className="mt-4 space-y-2">
+                      {profile.friends.map((friend) => (
+                        <li key={friend.userId}>
+                          <Link
+                            href={`/profile/${encodeURIComponent(friend.username)}`}
+                            className="flex items-center gap-3 rounded-xl border border-stone-100 bg-stone-50 px-3 py-2.5 transition-colors hover:border-primary-container/20 hover:bg-white"
+                          >
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-container/10 font-libre text-sm font-bold uppercase text-primary-container">
+                              {friend.username.charAt(0)}
+                            </div>
+                            <span className="font-hanken text-sm text-stone-800">
+                              @{friend.username}
+                            </span>
+                            <span className="material-symbols-outlined ml-auto text-base text-stone-300">
+                              chevron_right
+                            </span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              )}
+
               {tab === "servers" && (
                 <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
                   <h3 className="font-hanken text-[10px] font-bold uppercase tracking-widest text-stone-400">
@@ -487,6 +565,67 @@ export default function ProfilePage() {
                     </ul>
                   )}
                 </section>
+              )}
+
+              {tab === "settings" && profile.isOwnProfile && (
+                <div className="space-y-3">
+                  <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+                    <h3 className="font-hanken text-[10px] font-bold uppercase tracking-widest text-stone-400">
+                      Gizlilik ve Güvenlik Koşulları
+                    </h3>
+                    <div className="mt-3 space-y-3 font-hanken text-sm leading-relaxed text-stone-600">
+                      <p>
+                        MiCodex hesabın yalnızca senin oturumunla erişilebilir.
+                        Mesajların ve sunucu üyeliklerin hesabına bağlıdır; başka
+                        kullanıcılar profilinde yalnızca herkese açık bilgileri
+                        görür.
+                      </p>
+                      <p>
+                        Arkadaşlık istekleri karşılıklı onay gerektirir. Özel
+                        mesajlar yalnızca ilgili sohbet üyeleri tarafından
+                        okunabilir. Verilerin güvenliği için güçlü bir şifre
+                        kullanmanı ve oturumunu paylaşmamanı öneririz.
+                      </p>
+                      <p>
+                        Hesabını sildiğinde mesajların, sunucu üyeliklerin ve
+                        arkadaşlık bağlantıların kalıcı olarak kaldırılır. Bu
+                        işlem geri alınamaz.
+                      </p>
+                    </div>
+                  </section>
+
+                  <section className="rounded-2xl border border-red-200 bg-red-50/40 p-5 shadow-sm">
+                    <h3 className="font-hanken text-[10px] font-bold uppercase tracking-widest text-red-700">
+                      Hesap Silme
+                    </h3>
+                    <p className="mt-2 font-hanken text-sm text-stone-600">
+                      Hesabını kalıcı olarak silmek için kullanıcı adını yaz:{" "}
+                      <strong className="text-stone-800">{profile.username}</strong>
+                    </p>
+                    <input
+                      value={deleteConfirm}
+                      onChange={(e) => {
+                        setDeleteConfirm(e.target.value);
+                        setDeleteError("");
+                      }}
+                      placeholder={profile.username}
+                      className="mt-3 w-full rounded-xl border border-red-200 bg-white px-3 py-2 font-hanken text-sm text-stone-900 outline-none focus:border-red-400 focus:ring-1 focus:ring-red-200"
+                    />
+                    {deleteError && (
+                      <p className="mt-2 font-hanken text-sm text-red-600">
+                        {deleteError}
+                      </p>
+                    )}
+                    <button
+                      type="button"
+                      disabled={deleting}
+                      onClick={() => void handleDeleteAccount()}
+                      className="mt-4 rounded-xl bg-red-600 px-4 py-2 font-hanken text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-60"
+                    >
+                      {deleting ? "Siliniyor..." : "Hesabımı Kalıcı Olarak Sil"}
+                    </button>
+                  </section>
+                </div>
               )}
 
               {profile.isOwnProfile && (

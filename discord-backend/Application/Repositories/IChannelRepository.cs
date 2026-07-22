@@ -11,5 +11,6 @@ namespace Application.Repositories
         Task<List<Channel>> GetByServerIdAsync(Guid serverId);
         Task<Channel?> FindDmBetweenUsersAsync(Guid userA, Guid userB);
         Task AddAsync(Channel channel);
+        Task DeleteAsync(Guid id);
     }
 }

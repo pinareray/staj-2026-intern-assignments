@@ -13,6 +13,7 @@ namespace Application.Features.Dms.Queries.GetDms
     {
         private readonly IUserContextService _userContextService;
         private readonly IChannelRepository _channelRepository;
+        private readonly IChannelMemberRepository _channelMemberRepository;
         private readonly IMessageRepository _messageRepository;
         private readonly IUserRepository _userRepository;
         private readonly IFriendshipRepository _friendshipRepository;
@@ -20,12 +21,14 @@ namespace Application.Features.Dms.Queries.GetDms
         public GetDmsQueryHandler(
             IUserContextService userContextService,
             IChannelRepository channelRepository,
+            IChannelMemberRepository channelMemberRepository,
             IMessageRepository messageRepository,
             IUserRepository userRepository,
             IFriendshipRepository friendshipRepository)
         {
             _userContextService = userContextService;
             _channelRepository = channelRepository;
+            _channelMemberRepository = channelMemberRepository;
             _messageRepository = messageRepository;
             _userRepository = userRepository;
             _friendshipRepository = friendshipRepository;
@@ -48,12 +51,21 @@ namespace Application.Features.Dms.Queries.GetDms
 
                 string? lastMessage = null;
                 DateTime? lastMessageAt = null;
+                var unreadCount = 0;
 
                 if (dm != null)
                 {
                     var latest = await _messageRepository.GetLatestByChannelIdAsync(dm.Id);
                     lastMessage = latest?.Content;
                     lastMessageAt = latest?.CreatedAt;
+
+                    var membership = await _channelMemberRepository.GetMembershipAsync(
+                        dm.Id,
+                        currentUserId);
+                    unreadCount = await _messageRepository.CountUnreadInChannelAsync(
+                        dm.Id,
+                        currentUserId,
+                        membership?.LastReadAt);
                 }
 
                 result.Add(new DmListItemDto
@@ -62,12 +74,14 @@ namespace Application.Features.Dms.Queries.GetDms
                     UserId = friendId,
                     Username = user?.Username ?? "Kullanıcı",
                     LastMessage = lastMessage,
-                    LastMessageAt = lastMessageAt
+                    LastMessageAt = lastMessageAt,
+                    UnreadCount = unreadCount
                 });
             }
 
             return result
-                .OrderByDescending(d => d.LastMessageAt ?? DateTime.MinValue)
+                .OrderByDescending(d => d.UnreadCount > 0)
+                .ThenByDescending(d => d.LastMessageAt ?? DateTime.MinValue)
                 .ThenBy(d => d.Username, StringComparer.OrdinalIgnoreCase)
                 .ToList();
         }

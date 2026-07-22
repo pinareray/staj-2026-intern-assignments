@@ -1,5 +1,6 @@
 using Application.Interfaces;
 using Microsoft.AspNetCore.SignalR;
+using System;
 using System.Threading.Tasks;
 using WebAPI.Hubs;
 
@@ -20,6 +21,18 @@ namespace WebAPI.Services
         {
             // channelId grubundaki herkese "ReceiveMessage" olayını fırlat.
             await _hubContext.Clients.Group(channelId).SendAsync("ReceiveMessage", messageData);
+        }
+
+        public async Task SendReadReceiptAsync(string channelId, object receiptData)
+        {
+            await _hubContext.Clients.Group(channelId).SendAsync("ReadReceipt", receiptData);
+        }
+
+        public async Task NotifyDmUnreadAsync(Guid userId, object payload)
+        {
+            await _hubContext.Clients
+                .Group(ChatHub.UserGroup(userId))
+                .SendAsync("DmUnreadUpdated", payload);
         }
     }
 }

@@ -1,4 +1,5 @@
 using Application.Features.Users.Commands.ChangePassword;
+using Application.Features.Users.Commands.DeleteAccount;
 using Application.Features.Users.Commands.UpdateProfile;
 using Application.Features.Users.Queries.GetProfile;
 using Application.Features.Users.Queries.GetUserByUsername;
@@ -74,6 +75,20 @@ namespace WebAPI.Controllers
         {
             await _mediator.Send(command);
             return Ok(new { Message = "Şifre başarıyla güncellendi." });
+        }
+
+        [HttpDelete("me")]
+        public async Task<IActionResult> DeleteAccount()
+        {
+            try
+            {
+                await _mediator.Send(new DeleteAccountCommand());
+                return Ok(new { message = "Hesap silindi." });
+            }
+            catch (System.Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
     }
 }

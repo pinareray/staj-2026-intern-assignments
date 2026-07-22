@@ -36,6 +36,24 @@ namespace Persistence.Repositories
                 cm.ChannelId == channelId && cm.UserId == userId);
         }
 
+        public async Task<ChannelMember?> GetMembershipAsync(Guid channelId, Guid userId)
+        {
+            return await _context.ChannelMembers.FirstOrDefaultAsync(cm =>
+                cm.ChannelId == channelId && cm.UserId == userId);
+        }
+
+        public async Task UpdateLastReadAsync(Guid channelId, Guid userId, DateTime readAt)
+        {
+            var membership = await GetMembershipAsync(channelId, userId);
+            if (membership == null)
+            {
+                return;
+            }
+
+            membership.LastReadAt = readAt;
+            await _context.SaveChangesAsync();
+        }
+
         public async Task<List<ChannelMember>> GetByUserIdAsync(Guid userId)
         {
             return await _context.ChannelMembers

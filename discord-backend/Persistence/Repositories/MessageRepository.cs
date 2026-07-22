@@ -44,5 +44,21 @@ namespace Persistence.Repositories
                 .OrderByDescending(m => m.CreatedAt)
                 .FirstOrDefaultAsync();
         }
+
+        public async Task<int> CountUnreadInChannelAsync(
+            Guid channelId,
+            Guid excludeUserId,
+            DateTime? after)
+        {
+            var query = _context.Messages.Where(m =>
+                m.ChannelId == channelId && m.UserId != excludeUserId);
+
+            if (after.HasValue)
+            {
+                query = query.Where(m => m.CreatedAt > after.Value);
+            }
+
+            return await query.CountAsync();
+        }
     }
 }

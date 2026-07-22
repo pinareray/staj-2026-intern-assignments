@@ -20,3 +20,15 @@ export type ChatMessage = {
   createdAt: string;
   isStarred?: boolean;
 };
+
+export type CachedUserProfile = {
+  id: string;
+  username: string;
+  email: string;
+};
+
+export type UserSearchHit = {
+  id: string;
+  username: string;
+  isFriend: boolean;
+};
