@@ -161,6 +161,9 @@ using (var scope = app.Services.CreateScope())
         );
         CREATE UNIQUE INDEX IF NOT EXISTS "IX_StarredMessages_UserId_MessageId" ON "StarredMessages" ("UserId", "MessageId");
         CREATE INDEX IF NOT EXISTS "IX_StarredMessages_MessageId" ON "StarredMessages" ("MessageId");
+
+        ALTER TABLE "Messages" ADD COLUMN IF NOT EXISTS "EditedAt" timestamp with time zone;
+        ALTER TABLE "Messages" ADD COLUMN IF NOT EXISTS "AttachmentUrl" text;
         """);
 }
 
@@ -180,6 +183,7 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseCors("ClientCors");
+app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 

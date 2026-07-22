@@ -60,7 +60,10 @@ function FloatingDecor() {
 
 export default function LandingPage() {
   const router = useRouter();
-  const [checking, setChecking] = useState(true);
+  const [checking, setChecking] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return Boolean(localStorage.getItem("token"));
+  });
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -68,7 +71,8 @@ export default function LandingPage() {
       router.replace("/app");
       return;
     }
-    setChecking(false);
+    // Token yoksa landing'i göster (SSR hydration sonrası)
+    queueMicrotask(() => setChecking(false));
   }, [router]);
 
   if (checking) {

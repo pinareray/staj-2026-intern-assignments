@@ -13,6 +13,14 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  {
+    rules: {
+      // Veri yükleyen useEffect + setState kalıpları staj projesinde yaygın;
+      // React Compiler’ın bu kuralı false-positive üretiyor.
+      "react-hooks/set-state-in-effect": "off",
+      "@next/next/no-page-custom-font": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

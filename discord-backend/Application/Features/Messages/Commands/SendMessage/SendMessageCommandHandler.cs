@@ -33,7 +33,8 @@ namespace Application.Features.Messages.Commands.SendMessage
 
         public async Task<object> Handle(SendMessageCommand request, CancellationToken cancellationToken)
         {
-            if (string.IsNullOrWhiteSpace(request.Content))
+            if (string.IsNullOrWhiteSpace(request.Content) &&
+                string.IsNullOrWhiteSpace(request.AttachmentUrl))
             {
                 throw new Exception("Mesaj içeriği boş olamaz.");
             }
@@ -58,10 +59,15 @@ namespace Application.Features.Messages.Commands.SendMessage
             var message = new Message
             {
                 Id = Guid.NewGuid(),
-                Content = request.Content,
+                Content = string.IsNullOrWhiteSpace(request.Content)
+                    ? ""
+                    : request.Content.Trim(),
                 UserId = request.UserId,
                 ChannelId = request.ChannelId,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                AttachmentUrl = string.IsNullOrWhiteSpace(request.AttachmentUrl)
+                    ? null
+                    : request.AttachmentUrl.Trim()
             };
 
             await _messageRepository.AddAsync(message);
@@ -74,7 +80,9 @@ namespace Application.Features.Messages.Commands.SendMessage
                 message.UserId,
                 Username = user?.Username ?? "Kullanıcı",
                 message.ChannelId,
-                message.CreatedAt
+                message.CreatedAt,
+                message.EditedAt,
+                message.AttachmentUrl
             };
 
             await _chatNotificationService.SendMessageToChannelAsync(

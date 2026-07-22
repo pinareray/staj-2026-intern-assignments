@@ -76,6 +76,8 @@ namespace Application.Features.Messages.Queries.GetMessagesByChannel
                     Username = user?.Username ?? "Bilinmeyen",
                     ChannelId = message.ChannelId,
                     CreatedAt = message.CreatedAt,
+                    EditedAt = message.EditedAt,
+                    AttachmentUrl = message.AttachmentUrl,
                     IsStarred = starredIds.Contains(message.Id)
                 });
             }

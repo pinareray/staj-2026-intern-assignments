@@ -10,6 +10,7 @@ type ChannelSettingsModalProps = {
   channels: ChannelItem[];
   onClose: () => void;
   onChanged: () => void;
+  canManage?: boolean;
 };
 
 function channelTypeLabel(type: string) {
@@ -30,6 +31,7 @@ export default function ChannelSettingsModal({
   channels,
   onClose,
   onChanged,
+  canManage = false,
 }: ChannelSettingsModalProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -86,6 +88,12 @@ export default function ChannelSettingsModal({
           </p>
         </div>
 
+        {!canManage && (
+          <p className="mb-4 text-sm text-[#e1bfbd]/70 bg-white/5 border border-[#594140]/30 rounded-lg px-4 py-3 font-hanken shrink-0">
+            Kanal silmek için Owner/Admin olmalısın.
+          </p>
+        )}
+
         <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 min-h-0">
           {channels.length === 0 && (
             <p className="text-sm text-[#e1bfbd]/70 font-hanken py-4 text-center">
@@ -113,22 +121,24 @@ export default function ChannelSettingsModal({
                     {channelTypeLabel(channel.type)}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  disabled={isDeleting}
-                  onClick={() => void handleDelete(channel)}
-                  className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-hanken font-semibold transition-colors disabled:opacity-60 ${
-                    isConfirming
-                      ? "bg-[#ad2831] text-[#e6e2d9] hover:bg-[#8f1b1c]"
-                      : "border border-[#594140]/40 text-[#e1bfbd] hover:bg-white/5"
-                  }`}
-                >
-                  {isDeleting
-                    ? "Siliniyor..."
-                    : isConfirming
-                      ? "Emin misin?"
-                      : "Sil"}
-                </button>
+                {canManage && (
+                  <button
+                    type="button"
+                    disabled={isDeleting}
+                    onClick={() => void handleDelete(channel)}
+                    className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-hanken font-semibold transition-colors disabled:opacity-60 ${
+                      isConfirming
+                        ? "bg-[#ad2831] text-[#e6e2d9] hover:bg-[#8f1b1c]"
+                        : "border border-[#594140]/40 text-[#e1bfbd] hover:bg-white/5"
+                    }`}
+                  >
+                    {isDeleting
+                      ? "Siliniyor..."
+                      : isConfirming
+                        ? "Emin misin?"
+                        : "Sil"}
+                  </button>
+                )}
               </div>
             );
           })}

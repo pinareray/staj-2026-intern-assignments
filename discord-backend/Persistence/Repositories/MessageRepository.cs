@@ -24,6 +24,20 @@ namespace Persistence.Repositories
             await _context.SaveChangesAsync();
         }
 
+        public async Task UpdateAsync(Message message)
+        {
+            _context.Messages.Update(message);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task DeleteAsync(Guid id)
+        {
+            var message = await _context.Messages.FindAsync(id);
+            if (message == null) return;
+            _context.Messages.Remove(message);
+            await _context.SaveChangesAsync();
+        }
+
         public async Task<Message?> GetByIdAsync(Guid id)
         {
             return await _context.Messages.FirstOrDefaultAsync(m => m.Id == id);

@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import CreateServerModal from "@/components/CreateServerModal";
+import CreateServerModal from "@/components/modals/CreateServerModal";
+import { API_BASE_URL } from "@/services";
 import {
-  SERVER_SIDEBAR_DEFAULT,
   SERVER_SIDEBAR_LABEL_THRESHOLD,
   SERVER_SIDEBAR_MAX,
   SERVER_SIDEBAR_MIN,
@@ -20,6 +20,7 @@ type ServerSidebarProps = {
   totalUnread?: number;
   onMessagesHome?: () => void;
   onServerSelect: (server: ServerItem) => void;
+  refreshKey?: number;
 };
 
 export default function ServerSidebar({
@@ -28,16 +29,13 @@ export default function ServerSidebar({
   totalUnread = 0,
   onMessagesHome,
   onServerSelect,
+  refreshKey: externalRefreshKey = 0,
 }: ServerSidebarProps) {
   const router = useRouter();
   const [servers, setServers] = useState<ServerItem[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [width, setWidth] = useState(SERVER_SIDEBAR_DEFAULT);
-
-  useEffect(() => {
-    setWidth(loadServerSidebarWidth());
-  }, []);
+  const [width, setWidth] = useState(() => loadServerSidebarWidth());
 
   const handleWidthChange = useCallback((next: number) => {
     setWidth(next);
@@ -62,7 +60,7 @@ export default function ServerSidebar({
     }
 
     try {
-      const response = await fetch("http://localhost:5243/api/servers", {
+      const response = await fetch(`${API_BASE_URL}/api/servers`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -97,7 +95,7 @@ export default function ServerSidebar({
 
   useEffect(() => {
     loadServers();
-  }, [loadServers, refreshKey]);
+  }, [loadServers, refreshKey, externalRefreshKey]);
 
   const handleServerCreated = () => {
     setRefreshKey((prev) => prev + 1);

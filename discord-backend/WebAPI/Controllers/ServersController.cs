@@ -1,6 +1,7 @@
 using Application.Features.Channels.Queries.GetChannelsByServer;
 using Application.Features.Servers.Commands.AddMember;
 using Application.Features.Servers.Commands.CreateServer;
+using Application.Features.Servers.Commands.LeaveServer;
 using Application.Features.Servers.Commands.RemoveMember;
 using Application.Features.Servers.Queries.GetServerMembers;
 using Application.Features.Servers.Queries.GetServers;
@@ -31,7 +32,6 @@ namespace WebAPI.Controllers
             return Ok(servers);
         }
 
-        // GET api/servers/{serverId}/channels
         [HttpGet("{serverId:guid}/channels")]
         public async Task<IActionResult> GetChannels(Guid serverId)
         {
@@ -105,10 +105,27 @@ namespace WebAPI.Controllers
                 return BadRequest(new { message = ex.Message });
             }
         }
+
+        [HttpPost("{serverId:guid}/leave")]
+        public async Task<IActionResult> Leave(Guid serverId)
+        {
+            try
+            {
+                var result = await _mediator.Send(new LeaveServerCommand
+                {
+                    ServerId = serverId
+                });
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
     }
 
     public class AddServerMemberDto
     {
-        public string Username { get; set; }
+        public string Username { get; set; } = string.Empty;
     }
 }

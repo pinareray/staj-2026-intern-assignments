@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import ServerSidebar from "@/components/ServerSidebar";
-import ChannelSidebar from "@/components/ChannelSidebar";
-import DmSidebar from "@/components/DmSidebar";
-import ChatArea from "@/components/ChatArea";
+import ServerSidebar from "@/components/layout/ServerSidebar";
+import ChannelSidebar from "@/components/layout/ChannelSidebar";
+import DmSidebar from "@/components/layout/DmSidebar";
+import ChatArea from "@/components/chat/ChatArea";
 import {
   getInitialAppState,
   saveAppNavigation,
@@ -15,6 +15,11 @@ import {
 } from "@/lib/sidebarLayout";
 import type { ChannelItem, ServerItem } from "@/models";
 import { chatHub, fetchDmUnreadTotal } from "@/services";
+import {
+  ensureNotificationPermission,
+  setBrowserNotificationsEnabled,
+  showDmBrowserNotification,
+} from "@/lib/browserNotifications";
 
 export default function AppShell() {
   const initial = getInitialAppState();
@@ -30,11 +35,10 @@ export default function AppShell() {
   const [channelsEmpty, setChannelsEmpty] = useState(false);
   const [dmRefreshKey, setDmRefreshKey] = useState(0);
   const [totalUnread, setTotalUnread] = useState(0);
-  const [sidePanelOpen, setSidePanelOpen] = useState(true);
-
-  useEffect(() => {
-    setSidePanelOpen(loadChannelPanelOpen());
-  }, []);
+  const [sidePanelOpen, setSidePanelOpen] = useState(() =>
+    loadChannelPanelOpen()
+  );
+  const [serversRefreshKey, setServersRefreshKey] = useState(0);
 
   useEffect(() => {
     saveAppNavigation({
@@ -78,9 +82,13 @@ export default function AppShell() {
       setTotalUnread((prev) => prev + 1);
       setDmRefreshKey((k) => k + 1);
       void refreshUnread();
+      showDmBrowserNotification("Yeni mesaj", "Micodex'te yeni bir DM'in var.");
     });
 
     void chatHub.connect().then(() => chatHub.joinInbox());
+    void ensureNotificationPermission().then((ok) => {
+      if (ok) setBrowserNotificationsEnabled(true);
+    });
 
     const onVisible = () => {
       if (document.visibilityState === "visible") {
@@ -115,12 +123,20 @@ export default function AppShell() {
 
   const handleChannelSelect = useCallback((channel: ChannelItem) => {
     setSelectedChannel(channel);
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setSidePanelOpen(false);
+      saveChannelPanelOpen(false);
+    }
   }, []);
 
   const handleDmSelect = useCallback((channel: ChannelItem) => {
     setViewMode("dms");
     setSelectedServer(null);
     setSelectedChannel(channel);
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setSidePanelOpen(false);
+      saveChannelPanelOpen(false);
+    }
   }, []);
 
   const handleOpenDm = useCallback((channel: ChannelItem) => {
@@ -156,6 +172,14 @@ export default function AppShell() {
     void refreshUnread();
   }, [refreshUnread]);
 
+  const handleServerLeft = useCallback(() => {
+    setSelectedServer(null);
+    setSelectedChannel(null);
+    setChannelsReady(false);
+    setChannelsEmpty(false);
+    setServersRefreshKey((k) => k + 1);
+  }, []);
+
   const collapseSidePanel = useCallback(() => {
     setSidePanelOpen(false);
     saveChannelPanelOpen(false);
@@ -169,16 +193,39 @@ export default function AppShell() {
   const isDmMode = viewMode === "dms";
 
   return (
-    <main className="flex h-screen overflow-hidden bg-background text-on-surface">
+    <main className="relative flex h-screen overflow-hidden bg-background text-on-surface">
       <ServerSidebar
         currentServerId={selectedServer?.id ?? null}
         messagesActive={isDmMode}
         totalUnread={totalUnread}
         onMessagesHome={handleMessagesHome}
-        onServerSelect={handleServerSelect}
+        onServerSelect={(server) => {
+          handleServerSelect(server);
+          if (typeof window !== "undefined" && window.innerWidth < 768) {
+            setSidePanelOpen(true);
+            saveChannelPanelOpen(true);
+          }
+        }}
+        refreshKey={serversRefreshKey}
       />
-      {isDmMode ? (
-        sidePanelOpen ? (
+
+      {sidePanelOpen && (
+        <button
+          type="button"
+          aria-label="Paneli kapat"
+          className="fixed inset-0 z-30 bg-black/40 md:hidden"
+          onClick={collapseSidePanel}
+        />
+      )}
+
+      <div
+        className={`z-40 flex h-full shrink-0 transition-transform duration-200 ease-out max-md:fixed max-md:inset-y-0 max-md:left-[4.5rem] max-md:shadow-xl ${
+          sidePanelOpen
+            ? "max-md:translate-x-0"
+            : "max-md:pointer-events-none max-md:-translate-x-[120%] md:hidden"
+        }`}
+      >
+        {isDmMode ? (
           <DmSidebar
             selectedChannelId={selectedChannel?.id ?? null}
             onDmSelect={(channel) => handleDmSelect(channel)}
@@ -186,16 +233,18 @@ export default function AppShell() {
             onUnreadTotalChange={setTotalUnread}
             onCollapse={collapseSidePanel}
           />
-        ) : null
-      ) : sidePanelOpen ? (
-        <ChannelSidebar
-          selectedServer={selectedServer}
-          selectedChannelId={selectedChannel?.id ?? null}
-          onChannelSelect={handleChannelSelect}
-          onChannelsLoaded={handleChannelsLoaded}
-          onCollapse={collapseSidePanel}
-        />
-      ) : null}
+        ) : (
+          <ChannelSidebar
+            selectedServer={selectedServer}
+            selectedChannelId={selectedChannel?.id ?? null}
+            onChannelSelect={handleChannelSelect}
+            onChannelsLoaded={handleChannelsLoaded}
+            onCollapse={collapseSidePanel}
+            onServerLeft={handleServerLeft}
+          />
+        )}
+      </div>
+
       <ChatArea
         selectedChannel={selectedChannel}
         hasServer={!isDmMode && !!selectedServer}

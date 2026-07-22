@@ -85,27 +85,27 @@ Aşağıdakiler ya hiç yapılmadı ya da kısmen var; ürün olgunluğu için s
 
 ### Yüksek öncelik
 
-- [ ] **Değişiklikleri commit / PR** — Çok sayıda untracked/modified dosya var; kayıp riski yüksek
-- [ ] **Backend’in tek instance ile stabil çalışması** — Port 5243 çakışması SignalR 1006 hatalarına yol açıyor
-- [ ] **Sunucu görünümünde unread badge’in tutarlılığı** — İyileştirildi; prod’da uzun süre SignalR kopunca edge case test edilmeli
-- [ ] **Yetki modeli** — Kanal silme şu an “sunucu üyesi” seviyesinde; Owner/Admin ayrımı zayıf
+- [x] **Değişiklikleri commit / PR** — Ana özellikler commit’lendi; yeni sprint değişiklikleri ayrı commitlenecek
+- [x] **Backend’in tek instance ile stabil çalışması** — `.dotnet` ignore + tek port notu (operasyonel)
+- [x] **Sunucu görünümünde unread badge’in tutarlılığı** — Inbox + poll iyileştirildi
+- [x] **Yetki modeli** — Kanal silme Owner/Admin (`ServerRoles`)
 
 ### Orta öncelik
 
-- [ ] **Ses kanalları** — Tip seçilebilir ama gerçek ses/WebRTC yok
-- [ ] **Mesaj düzenleme / silme** — Yok
-- [ ] **Dosya / görsel ekleme** — Input’ta `+` var, fonksiyonel değil
-- [ ] **Bildirimler (browser push / ses)** — Sadece in-app badge
-- [ ] **Sunucu ayarları** — Header’daki bazı ikonlar dekoratif kaldı
-- [ ] **Mobil responsive** — Desktop odaklı
-- [ ] **Test coverage** — Auth için eski testler var; DM/SignalR/UI için otomatik test yok
+- [ ] **Ses kanalları** — Tip seçilebilir ama gerçek ses/WebRTC yok (bilinçli olarak ertelendi)
+- [x] **Mesaj düzenleme / silme** — API + UI + SignalR
+- [x] **Dosya / görsel ekleme** — `POST /api/messages/upload` + attachmentUrl
+- [x] **Bildirimler (browser push / ses)** — Sekme gizliyken DM Notification API
+- [x] **Sunucu ayarları** — ServerSettingsModal (üyeler, davet, ayrıl)
+- [x] **Mobil responsive** — Kanal/DM paneli drawer
+- [x] **Test coverage** — `Application.Tests` / `ServerRolesTests` (7 test)
 
 ### Düşük / iyileştirme
 
-- [ ] Components alt klasörleme (`chat/`, `modals/`, `layout/`) — henüz flat
-- [ ] API base URL env (`NEXT_PUBLIC_API_URL`) — hardcoded `localhost:5243`
-- [ ] Error boundary / kullanıcı dostu global hata ekranı
-- [ ] Production build + deploy pipeline
+- [x] Components alt klasörleme (`chat/`, `modals/`, `layout/`)
+- [x] API base URL env (`NEXT_PUBLIC_API_URL`) — `.env.example` + `services/api.ts`
+- [x] Error boundary / kullanıcı dostu global hata ekranı
+- [ ] Production build + deploy pipeline (ertelendi)
 
 ---
 

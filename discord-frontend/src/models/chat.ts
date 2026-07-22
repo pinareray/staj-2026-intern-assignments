@@ -18,6 +18,8 @@ export type ChatMessage = {
   username: string;
   channelId: string;
   createdAt: string;
+  editedAt?: string | null;
+  attachmentUrl?: string | null;
   isStarred?: boolean;
 };
 

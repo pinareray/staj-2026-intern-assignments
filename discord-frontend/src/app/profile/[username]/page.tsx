@@ -168,7 +168,7 @@ export default function ProfilePage() {
       month: "long",
       year: "numeric",
     });
-  }, [profile?.createdAt]);
+  }, [profile]);
 
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();

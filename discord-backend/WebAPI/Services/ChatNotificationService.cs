@@ -34,5 +34,15 @@ namespace WebAPI.Services
                 .Group(ChatHub.UserGroup(userId))
                 .SendAsync("DmUnreadUpdated", payload);
         }
+
+        public async Task NotifyMessageDeletedAsync(string channelId, object payload)
+        {
+            await _hubContext.Clients.Group(channelId).SendAsync("MessageDeleted", payload);
+        }
+
+        public async Task NotifyMessageEditedAsync(string channelId, object payload)
+        {
+            await _hubContext.Clients.Group(channelId).SendAsync("MessageEdited", payload);
+        }
     }
 }

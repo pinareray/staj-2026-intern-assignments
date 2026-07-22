@@ -13,9 +13,7 @@ import {
   getAuthErrorMessage,
   validateEmail,
 } from "@/lib/authValidation";
-import { cacheCurrentUserProfile } from "@/services";
-
-const API_BASE_URL = "http://localhost:5243";
+import { cacheCurrentUserProfile, API_BASE_URL } from "@/services";
 
 export default function LoginPage() {
   const router = useRouter();

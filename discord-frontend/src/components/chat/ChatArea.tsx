@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ChangeEvent,
   FormEvent,
   KeyboardEvent,
   useEffect,
@@ -9,8 +10,15 @@ import {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
-import FriendsList from "@/components/FriendsList";
-import { API_BASE_URL, fetchDmPeerReadAt, markDmRead } from "@/services";
+import FriendsList from "@/components/chat/FriendsList";
+import {
+  API_BASE_URL,
+  deleteMessage,
+  editMessage,
+  fetchDmPeerReadAt,
+  markDmRead,
+  uploadMessageFile,
+} from "@/services";
 import { chatHub } from "@/services";
 import type { ChannelItem, ChatMessage } from "@/models";
 
@@ -31,6 +39,8 @@ function mapMessage(
   m: Record<string, unknown>,
   fallbackChannelId?: string
 ): ChatMessage {
+  const editedRaw = m.editedAt ?? m.EditedAt;
+  const attachmentRaw = m.attachmentUrl ?? m.AttachmentUrl;
   return {
     id: String(m.id ?? m.Id),
     content: String(m.content ?? m.Content ?? ""),
@@ -40,8 +50,19 @@ function mapMessage(
       m.channelId ?? m.ChannelId ?? fallbackChannelId ?? ""
     ),
     createdAt: String(m.createdAt ?? m.CreatedAt ?? ""),
+    editedAt: editedRaw ? String(editedRaw) : null,
+    attachmentUrl: attachmentRaw ? String(attachmentRaw) : null,
     isStarred: Boolean(m.isStarred ?? m.IsStarred ?? false),
   };
+}
+
+function isImageAttachment(url: string) {
+  return /\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(url);
+}
+
+function resolveAttachmentUrl(url: string) {
+  if (/^https?:\/\//i.test(url)) return url;
+  return `${API_BASE_URL}${url.startsWith("/") ? "" : "/"}${url}`;
 }
 
 function getReadReceiptMessageId(
@@ -96,6 +117,16 @@ export default function ChatArea({
   const [starredOnly, setStarredOnly] = useState(false);
   const [typingUser, setTypingUser] = useState<string | null>(null);
   const [peerLastReadAt, setPeerLastReadAt] = useState<string | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+  const [pendingAttachmentUrl, setPendingAttachmentUrl] = useState<string | null>(
+    null
+  );
+  const [pendingAttachmentName, setPendingAttachmentName] = useState<string | null>(
+    null
+  );
+  const [uploading, setUploading] = useState(false);
 
   const selectedChannelIdRef = useRef<string | null>(null);
   const selectedChannelTypeRef = useRef<string | null>(null);
@@ -105,13 +136,23 @@ export default function ChatArea({
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingSentRef = useRef(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const isNearBottomRef = useRef(true);
   const shouldAutoScrollRef = useRef(false);
-  selectedChannelIdRef.current = selectedChannelId;
-  selectedChannelTypeRef.current = selectedChannel?.type ?? null;
-  onIncomingMessageRef.current = onIncomingMessage;
-  currentUsernameRef.current = currentUsername;
-  currentUserIdRef.current = currentUserId;
+
+  useEffect(() => {
+    selectedChannelIdRef.current = selectedChannelId;
+    selectedChannelTypeRef.current = selectedChannel?.type ?? null;
+    onIncomingMessageRef.current = onIncomingMessage;
+    currentUsernameRef.current = currentUsername;
+    currentUserIdRef.current = currentUserId;
+  }, [
+    selectedChannelId,
+    selectedChannel?.type,
+    onIncomingMessage,
+    currentUsername,
+    currentUserId,
+  ]);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -123,7 +164,7 @@ export default function ChatArea({
         payload[
           "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"
         ] ?? payload.sub;
-      if (id) setCurrentUserId(String(id));
+      if (id) queueMicrotask(() => setCurrentUserId(String(id)));
 
       const name =
         payload[
@@ -131,14 +172,14 @@ export default function ChatArea({
         ] ??
         payload.unique_name ??
         payload.name;
-      if (name) setCurrentUsername(String(name));
+      if (name) queueMicrotask(() => setCurrentUsername(String(name)));
     } catch {
       // ignore
     }
 
     const loadMe = async () => {
       try {
-        const response = await fetch("http://localhost:5243/api/users/me", {
+        const response = await fetch(`${API_BASE_URL}/api/users/me`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!response.ok) return;
@@ -159,7 +200,7 @@ export default function ChatArea({
     const token = localStorage.getItem("token");
     if (!token) return;
 
-    const unsubMessage = chatHub.subscribe("ReceiveMessage", (raw) => {
+    const unsubMessage = chatHub.subscribe("ReceiveMessage", (raw: unknown) => {
       const message = mapMessage(raw as Record<string, unknown>);
       const currentId = selectedChannelIdRef.current;
 
@@ -185,7 +226,7 @@ export default function ChatArea({
       onIncomingMessageRef.current?.();
     });
 
-    const unsubTyping = chatHub.subscribe("UserTyping", (raw) => {
+    const unsubTyping = chatHub.subscribe("UserTyping", (raw: unknown) => {
       const payload = raw as Record<string, unknown>;
       const channelId = String(payload.channelId ?? payload.ChannelId ?? "");
       const username = String(payload.username ?? payload.Username ?? "");
@@ -197,7 +238,7 @@ export default function ChatArea({
       typingTimeoutRef.current = setTimeout(() => setTypingUser(null), 3000);
     });
 
-    const unsubRead = chatHub.subscribe("ReadReceipt", (raw) => {
+    const unsubRead = chatHub.subscribe("ReadReceipt", (raw: unknown) => {
       const payload = raw as Record<string, unknown>;
       const channelId = String(payload.channelId ?? payload.ChannelId ?? "");
       const readerId = String(payload.userId ?? payload.UserId ?? "");
@@ -207,12 +248,37 @@ export default function ChatArea({
       if (readAt) setPeerLastReadAt(String(readAt));
     });
 
+    const unsubDeleted = chatHub.subscribe("MessageDeleted", (raw: unknown) => {
+      const payload = raw as Record<string, unknown>;
+      const channelId = String(payload.channelId ?? payload.ChannelId ?? "");
+      const messageId = String(payload.messageId ?? payload.MessageId ?? "");
+      if (!channelId || channelId !== selectedChannelIdRef.current) return;
+      if (!messageId) return;
+      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+      setEditingMessageId((prev) => (prev === messageId ? null : prev));
+    });
+
+    const unsubEdited = chatHub.subscribe("MessageEdited", (raw: unknown) => {
+      const message = mapMessage(raw as Record<string, unknown>);
+      if (
+        !message.channelId ||
+        message.channelId !== selectedChannelIdRef.current
+      ) {
+        return;
+      }
+      setMessages((prev) =>
+        prev.map((m) => (m.id === message.id ? { ...m, ...message } : m))
+      );
+    });
+
     void chatHub.connect();
 
     return () => {
       unsubMessage();
       unsubTyping();
       unsubRead();
+      unsubDeleted();
+      unsubEdited();
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
   }, []);
@@ -328,6 +394,10 @@ export default function ChatArea({
     setSearchQuery("");
     setAuthorFilter("");
     setStarredOnly(false);
+    setEditingMessageId(null);
+    setEditDraft("");
+    setPendingAttachmentUrl(null);
+    setPendingAttachmentName(null);
     loadMessages();
   }, [selectedChannelId, selectedChannel?.type, router]);
 
@@ -347,7 +417,13 @@ export default function ChatArea({
     return messages.filter((message) => {
       if (starredOnly && !message.isStarred) return false;
       if (author && !message.username.toLowerCase().includes(author)) return false;
-      if (q && !message.content.toLowerCase().includes(q)) return false;
+      if (
+        q &&
+        !message.content.toLowerCase().includes(q) &&
+        !(message.attachmentUrl ?? "").toLowerCase().includes(q)
+      ) {
+        return false;
+      }
       return true;
     });
   }, [messages, searchQuery, authorFilter, starredOnly]);
@@ -380,6 +456,115 @@ export default function ChatArea({
           {content.slice(idx, idx + q.length)}
         </mark>
         {content.slice(idx + q.length)}
+      </>
+    );
+  };
+
+  const renderAttachment = (url: string, mine: boolean) => {
+    const href = resolveAttachmentUrl(url);
+    if (isImageAttachment(url)) {
+      return (
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2 block overflow-hidden rounded-lg"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={href}
+            alt="Ek"
+            className="max-h-64 max-w-full rounded-lg object-contain"
+          />
+        </a>
+      );
+    }
+
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className={`mt-2 inline-flex items-center gap-1.5 text-sm font-hanken underline break-all ${
+          mine ? "text-white/90 hover:text-white" : "text-primary-container"
+        }`}
+      >
+        <span className="material-symbols-outlined text-base">attach_file</span>
+        {url.split("/").pop() || "Dosya"}
+      </a>
+    );
+  };
+
+  const renderMessageBody = (message: ChatMessage, mine: boolean) => {
+    const isEditing = editingMessageId === message.id;
+
+    if (isEditing) {
+      return (
+        <div className="space-y-2">
+          <textarea
+            value={editDraft}
+            onChange={(e) => setEditDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void saveEdit(message.id);
+              }
+              if (e.key === "Escape") cancelEdit();
+            }}
+            rows={3}
+            className="w-full min-w-[220px] rounded-lg border border-stone-200 bg-white px-3 py-2 text-left text-sm text-stone-900 outline-none focus:border-primary-container/40 font-hanken"
+            disabled={editSaving}
+            autoFocus
+          />
+          <div className="flex items-center gap-2 justify-end">
+            <button
+              type="button"
+              onClick={cancelEdit}
+              disabled={editSaving}
+              className="rounded-lg px-2.5 py-1 font-hanken text-xs text-stone-500 hover:bg-stone-100"
+            >
+              İptal
+            </button>
+            <button
+              type="button"
+              onClick={() => void saveEdit(message.id)}
+              disabled={editSaving || !editDraft.trim()}
+              className="rounded-lg bg-primary-container px-2.5 py-1 font-hanken text-xs text-white disabled:opacity-50"
+            >
+              Kaydet
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <>
+        {message.content ? (
+          <p className="text-sm font-hanken leading-relaxed">
+            {highlightContent(message.content)}
+            {message.editedAt ? (
+              <span
+                className={`ml-1 text-[10px] ${
+                  mine ? "text-white/70" : "text-stone-400"
+                }`}
+              >
+                (düzenlendi)
+              </span>
+            ) : null}
+          </p>
+        ) : message.editedAt ? (
+          <p
+            className={`text-[10px] font-hanken ${
+              mine ? "text-white/70" : "text-stone-400"
+            }`}
+          >
+            (düzenlendi)
+          </p>
+        ) : null}
+        {message.attachmentUrl
+          ? renderAttachment(message.attachmentUrl, mine)
+          : null}
       </>
     );
   };
@@ -417,9 +602,92 @@ export default function ChatArea({
     }
   };
 
+  const startEdit = (message: ChatMessage) => {
+    setEditingMessageId(message.id);
+    setEditDraft(message.content);
+  };
+
+  const cancelEdit = () => {
+    setEditingMessageId(null);
+    setEditDraft("");
+    setEditSaving(false);
+  };
+
+  const saveEdit = async (messageId: string) => {
+    const content = editDraft.trim();
+    if (!content || editSaving) return;
+
+    setEditSaving(true);
+    try {
+      const data = await editMessage(messageId, content);
+      const updated = mapMessage(data);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? {
+                ...m,
+                content: updated.content,
+                editedAt: updated.editedAt ?? new Date().toISOString(),
+              }
+            : m
+        )
+      );
+      cancelEdit();
+    } catch {
+      setEditSaving(false);
+    }
+  };
+
+  const handleDelete = async (message: ChatMessage) => {
+    if (
+      !window.confirm("Bu mesajı silmek istediğine emin misin?")
+    ) {
+      return;
+    }
+
+    try {
+      await deleteMessage(message.id);
+      setMessages((prev) => prev.filter((m) => m.id !== message.id));
+      if (editingMessageId === message.id) cancelEdit();
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleFileSelect = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !selectedChannelId) return;
+
+    setUploading(true);
+    try {
+      const uploaded = await uploadMessageFile(file);
+      if (!uploaded.url) throw new Error("Dosya URL alınamadı.");
+      setPendingAttachmentUrl(uploaded.url);
+      setPendingAttachmentName(uploaded.fileName || file.name);
+    } catch {
+      // ignore
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const clearPendingAttachment = () => {
+    setPendingAttachmentUrl(null);
+    setPendingAttachmentName(null);
+  };
+
   const handleSend = async () => {
     const content = draft.trim();
-    if (!selectedChannelId || !content || !currentUserId || sending) return;
+    if (
+      !selectedChannelId ||
+      (!content && !pendingAttachmentUrl) ||
+      !currentUserId ||
+      sending ||
+      uploading
+    ) {
+      return;
+    }
 
     const token = localStorage.getItem("token");
     if (!token) {
@@ -439,6 +707,7 @@ export default function ChatArea({
           channelId: selectedChannelId,
           content,
           senderId: currentUserId,
+          attachmentUrl: pendingAttachmentUrl ?? undefined,
         }),
       });
 
@@ -468,6 +737,7 @@ export default function ChatArea({
       });
       shouldAutoScrollRef.current = true;
       setDraft("");
+      clearPendingAttachment();
       setTypingUser(null);
     } catch {
       // ağ hatası
@@ -717,6 +987,22 @@ export default function ChatArea({
                     <div className="flex items-baseline gap-2 justify-end">
                       <button
                         type="button"
+                        title="Sil"
+                        onClick={() => void handleDelete(message)}
+                        className="material-symbols-outlined text-base text-stone-300 transition-colors hover:text-red-500"
+                      >
+                        delete
+                      </button>
+                      <button
+                        type="button"
+                        title="Düzenle"
+                        onClick={() => startEdit(message)}
+                        className="material-symbols-outlined text-base text-stone-300 transition-colors hover:text-primary-container"
+                      >
+                        edit
+                      </button>
+                      <button
+                        type="button"
                         title={message.isStarred ? "Yıldızı kaldır" : "Yıldızla"}
                         onClick={() => void toggleStar(message)}
                         className={`material-symbols-outlined text-base transition-colors ${
@@ -748,9 +1034,7 @@ export default function ChatArea({
                       </button>
                     </div>
                     <div className="inline-block max-w-[85%] p-4 rounded-xl rounded-tr-sm bg-primary-container text-white shadow-md text-left">
-                      <p className="text-sm font-hanken leading-relaxed">
-                        {highlightContent(message.content)}
-                      </p>
+                      {renderMessageBody(message, true)}
                     </div>
                     {showReadReceipt && (
                       <p className="pr-1 font-hanken text-[11px] text-stone-400">
@@ -804,9 +1088,7 @@ export default function ChatArea({
                     </button>
                   </div>
                   <div className="inline-block max-w-[85%] p-4 rounded-xl rounded-tl-sm bg-white text-stone-800 shadow-sm border border-stone-200">
-                    <p className="text-sm font-hanken leading-relaxed">
-                      {highlightContent(message.content)}
-                    </p>
+                    {renderMessageBody(message, false)}
                   </div>
                 </div>
               </div>
@@ -823,45 +1105,82 @@ export default function ChatArea({
         )}
         <form
           onSubmit={handleSubmit}
-          className="max-w-5xl mx-auto flex items-end gap-3 bg-stone-50 rounded-2xl p-2 m-6 border border-stone-200 transition-all focus-within:border-primary-container/40"
+          className="max-w-5xl mx-auto flex flex-col gap-2 bg-stone-50 rounded-2xl p-2 m-6 border border-stone-200 transition-all focus-within:border-primary-container/40"
         >
-          <button
-            type="button"
-            className="p-2 text-stone-400 hover:text-primary-container transition-colors"
-          >
-            <span className="material-symbols-outlined">add_circle</span>
-          </button>
-          <div className="flex-1">
-            <textarea
-              value={draft}
-              onChange={(e) => handleDraftChange(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="w-full bg-transparent border-none focus:ring-0 text-stone-900 placeholder:text-stone-400 py-2 custom-scrollbar resize-none max-h-32 text-sm outline-none font-hanken"
-              placeholder={
-                selectedChannel
-                  ? "Mesaj yaz..."
-                  : isDmMode
-                    ? "Önce bir sohbet seç..."
-                    : "Önce bir kanal seç..."
-              }
-              rows={1}
-              disabled={!selectedChannel || sending}
+          {pendingAttachmentUrl && (
+            <div className="flex items-center gap-2 px-2 pt-1">
+              <span className="material-symbols-outlined text-base text-primary-container">
+                attach_file
+              </span>
+              <span className="flex-1 truncate font-hanken text-xs text-stone-600">
+                {pendingAttachmentName || "Dosya eklendi"}
+              </span>
+              <button
+                type="button"
+                onClick={clearPendingAttachment}
+                className="material-symbols-outlined text-base text-stone-400 hover:text-red-500"
+                title="Eki kaldır"
+              >
+                close
+              </button>
+            </div>
+          )}
+          <div className="flex items-end gap-3">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,image/png,image/jpeg,image/gif,image/webp,application/pdf"
+              className="hidden"
+              onChange={(e) => void handleFileSelect(e)}
             />
-          </div>
-          <div className="flex items-center gap-2 p-1">
             <button
               type="button"
-              className="p-2 text-stone-400 hover:text-stone-700 transition-colors"
+              title="Dosya ekle"
+              disabled={!selectedChannel || sending || uploading}
+              onClick={() => fileInputRef.current?.click()}
+              className="p-2 text-stone-400 hover:text-primary-container transition-colors disabled:opacity-50"
             >
-              <span className="material-symbols-outlined">mood</span>
+              <span className="material-symbols-outlined">
+                {uploading ? "hourglass_empty" : "add_circle"}
+              </span>
             </button>
-            <button
-              type="submit"
-              disabled={!selectedChannel || !draft.trim() || sending}
-              className="w-10 h-10 bg-primary-container text-white rounded-xl flex items-center justify-center hover:bg-[#8f1b1c] transition-all active:scale-95 shadow-md disabled:opacity-50"
-            >
-              <span className="material-symbols-outlined">send</span>
-            </button>
+            <div className="flex-1">
+              <textarea
+                value={draft}
+                onChange={(e) => handleDraftChange(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="w-full bg-transparent border-none focus:ring-0 text-stone-900 placeholder:text-stone-400 py-2 custom-scrollbar resize-none max-h-32 text-sm outline-none font-hanken"
+                placeholder={
+                  selectedChannel
+                    ? "Mesaj yaz..."
+                    : isDmMode
+                      ? "Önce bir sohbet seç..."
+                      : "Önce bir kanal seç..."
+                }
+                rows={1}
+                disabled={!selectedChannel || sending}
+              />
+            </div>
+            <div className="flex items-center gap-2 p-1">
+              <button
+                type="button"
+                className="p-2 text-stone-400 hover:text-stone-700 transition-colors"
+              >
+                <span className="material-symbols-outlined">mood</span>
+              </button>
+              <button
+                type="submit"
+                disabled={
+                  !selectedChannel ||
+                  (!draft.trim() && !pendingAttachmentUrl) ||
+                  sending ||
+                  uploading
+                }
+                className="w-10 h-10 bg-primary-container text-white rounded-xl flex items-center justify-center hover:bg-[#8f1b1c] transition-all active:scale-95 shadow-md disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined">send</span>
+              </button>
+            </div>
           </div>
         </form>
       </footer>

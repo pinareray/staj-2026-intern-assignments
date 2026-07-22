@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import CreateChannelModal from "@/components/CreateChannelModal";
-import ChannelSettingsModal from "@/components/ChannelSettingsModal";
-import InviteMemberModal from "@/components/InviteMemberModal";
+import CreateChannelModal from "@/components/modals/CreateChannelModal";
+import ChannelSettingsModal from "@/components/modals/ChannelSettingsModal";
+import InviteMemberModal from "@/components/modals/InviteMemberModal";
+import ServerSettingsModal from "@/components/modals/ServerSettingsModal";
+import { API_BASE_URL } from "@/services";
 import type { ChannelItem, ServerItem } from "@/models";
 
 type ChannelSidebarProps = {
@@ -13,6 +15,7 @@ type ChannelSidebarProps = {
   onChannelSelect: (channel: ChannelItem) => void;
   onChannelsLoaded: (channels: ChannelItem[]) => void;
   onCollapse?: () => void;
+  onServerLeft?: () => void;
 };
 
 export default function ChannelSidebar({
@@ -21,6 +24,7 @@ export default function ChannelSidebar({
   onChannelSelect,
   onChannelsLoaded,
   onCollapse,
+  onServerLeft,
 }: ChannelSidebarProps) {
   const router = useRouter();
   const [username, setUsername] = useState("");
@@ -29,6 +33,8 @@ export default function ChannelSidebar({
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [isServerSettingsOpen, setIsServerSettingsOpen] = useState(false);
+  const [canManageChannels, setCanManageChannels] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -40,7 +46,7 @@ export default function ChannelSidebar({
       }
 
       try {
-        const response = await fetch("http://localhost:5243/api/users/me", {
+        const response = await fetch(`${API_BASE_URL}/api/users/me`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -57,6 +63,8 @@ export default function ChannelSidebar({
         const data = await response.json();
         setUsername(data.username ?? data.Username ?? "");
         setEmail(String(data.email ?? data.Email ?? "").toLowerCase());
+        const id = String(data.id ?? data.Id ?? "");
+        if (id) localStorage.setItem("userId", id);
       } catch {
         router.push("/login");
       }
@@ -64,6 +72,46 @@ export default function ChannelSidebar({
 
     loadProfile();
   }, [router]);
+
+  useEffect(() => {
+    const loadMembership = async () => {
+      if (!selectedServer) {
+        setCanManageChannels(false);
+        return;
+      }
+
+      const token = localStorage.getItem("token");
+      const userId = localStorage.getItem("userId");
+      if (!token || !userId) {
+        setCanManageChannels(false);
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/servers/${selectedServer.id}/members`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (!response.ok) {
+          setCanManageChannels(false);
+          return;
+        }
+
+        const data = await response.json();
+        const list = Array.isArray(data) ? data : [];
+        const me = list.find(
+          (m: Record<string, unknown>) =>
+            String(m.userId ?? m.UserId) === userId
+        );
+        const role = String(me?.role ?? me?.Role ?? "").toLowerCase();
+        setCanManageChannels(role === "owner" || role === "admin");
+      } catch {
+        setCanManageChannels(false);
+      }
+    };
+
+    void loadMembership();
+  }, [selectedServer, refreshKey]);
 
   useEffect(() => {
     const loadChannels = async () => {
@@ -81,7 +129,7 @@ export default function ChannelSidebar({
 
       try {
         const response = await fetch(
-          `http://localhost:5243/api/servers/${selectedServer.id}/channels`,
+          `${API_BASE_URL}/api/servers/${selectedServer.id}/channels`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -117,17 +165,27 @@ export default function ChannelSidebar({
     };
 
     loadChannels();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedServer, router, onChannelsLoaded, refreshKey]);
 
   return (
     <>
       <nav className="w-72 flex flex-col border-r border-stone-200 bg-white shrink-0">
         <header className="h-16 px-6 flex items-center justify-between border-b border-stone-200">
-          <h1 className="font-libre text-lg tracking-tight text-stone-900 truncate">
-            {selectedServer?.name || "Sunucu Seçilmedi"}
-          </h1>
-          <div className="flex items-center gap-1">
+          {selectedServer ? (
+            <button
+              type="button"
+              title="Sunucu ayarları"
+              onClick={() => setIsServerSettingsOpen(true)}
+              className="min-w-0 flex-1 text-left font-libre text-lg tracking-tight text-stone-900 truncate hover:text-primary-container transition-colors"
+            >
+              {selectedServer.name}
+            </button>
+          ) : (
+            <h1 className="font-libre text-lg tracking-tight text-stone-900 truncate">
+              Sunucu Seçilmedi
+            </h1>
+          )}
+          <div className="flex items-center gap-1 shrink-0">
             {selectedServer && (
               <button
                 type="button"
@@ -140,7 +198,7 @@ export default function ChannelSidebar({
                 </span>
               </button>
             )}
-            {selectedServer && (
+            {selectedServer && onCollapse && (
               <button
                 type="button"
                 title="Kanal panelini gizle"
@@ -148,7 +206,7 @@ export default function ChannelSidebar({
                 className="rounded-lg p-1.5 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700"
               >
                 <span className="material-symbols-outlined text-xl">
-                  expand_more
+                  left_panel_close
                 </span>
               </button>
             )}
@@ -289,6 +347,7 @@ export default function ChannelSidebar({
             isOpen={isSettingsOpen}
             serverName={selectedServer.name}
             channels={channels}
+            canManage={canManageChannels}
             onClose={() => setIsSettingsOpen(false)}
             onChanged={() => setRefreshKey((k) => k + 1)}
           />
@@ -297,6 +356,24 @@ export default function ChannelSidebar({
             serverId={selectedServer.id}
             serverName={selectedServer.name}
             onClose={() => setIsInviteOpen(false)}
+          />
+          <ServerSettingsModal
+            isOpen={isServerSettingsOpen}
+            serverId={selectedServer.id}
+            serverName={selectedServer.name}
+            onClose={() => setIsServerSettingsOpen(false)}
+            onLeftServer={() => {
+              setIsServerSettingsOpen(false);
+              onServerLeft?.();
+            }}
+            onInvite={() => {
+              setIsServerSettingsOpen(false);
+              setIsInviteOpen(true);
+            }}
+            onChannelSettings={() => {
+              setIsServerSettingsOpen(false);
+              setIsSettingsOpen(true);
+            }}
           />
         </>
       )}

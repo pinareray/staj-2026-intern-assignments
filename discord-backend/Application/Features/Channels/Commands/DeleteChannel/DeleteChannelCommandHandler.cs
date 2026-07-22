@@ -1,3 +1,4 @@
+using Application.Common;
 using Application.Interfaces;
 using Application.Repositories;
 using MediatR;
@@ -44,12 +45,17 @@ namespace Application.Features.Channels.Commands.DeleteChannel
             }
 
             var currentUserId = _userContextService.GetCurrentUserId();
-            var isMember = await _serverRepository.IsMemberAsync(
+            var membership = await _serverRepository.GetMembershipAsync(
                 channel.ServerId.Value,
                 currentUserId);
-            if (!isMember)
+            if (membership == null)
             {
                 throw new Exception("Bu kanalı silme yetkiniz yok.");
+            }
+
+            if (!ServerRoles.CanManageChannels(membership.Role))
+            {
+                throw new Exception("Kanal silmek için Owner veya Admin olmalısınız.");
             }
 
             await _channelRepository.DeleteAsync(channel.Id);

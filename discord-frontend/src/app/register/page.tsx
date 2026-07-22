@@ -14,8 +14,7 @@ import {
   validateEmail,
   validateUsername,
 } from "@/lib/authValidation";
-
-const API_BASE_URL = "http://localhost:5243";
+import { API_BASE_URL } from "@/services";
 
 export default function RegisterPage() {
   const router = useRouter();

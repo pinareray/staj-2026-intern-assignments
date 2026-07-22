@@ -1,4 +1,6 @@
-export const API_BASE_URL = "http://localhost:5243";
+export const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ||
+  "http://localhost:5243";
 
 export function getAuthToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -185,4 +187,104 @@ export async function deleteChannel(channelId: string): Promise<void> {
     }
     throw new Error(message);
   }
+}
+
+export async function leaveServer(serverId: string): Promise<void> {
+  const response = await authFetch(`/api/servers/${serverId}/leave`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    let message = "Sunucudan ayrılılamadı.";
+    try {
+      const errData = (await response.json()) as Record<string, unknown>;
+      message = String(
+        errData.title ?? errData.message ?? errData.detail ?? message
+      );
+    } catch {
+      // ignore
+    }
+    throw new Error(message);
+  }
+}
+
+export async function deleteMessage(messageId: string): Promise<void> {
+  const response = await authFetch(`/api/messages/${messageId}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    let message = "Mesaj silinemedi.";
+    try {
+      const errData = (await response.json()) as Record<string, unknown>;
+      message = String(errData.message ?? errData.title ?? message);
+    } catch {
+      // ignore
+    }
+    throw new Error(message);
+  }
+}
+
+export async function editMessage(
+  messageId: string,
+  content: string
+): Promise<Record<string, unknown>> {
+  const response = await authFetch(`/api/messages/${messageId}`, {
+    method: "PUT",
+    body: JSON.stringify({ content }),
+  });
+
+  if (!response.ok) {
+    let message = "Mesaj düzenlenemedi.";
+    try {
+      const errData = (await response.json()) as Record<string, unknown>;
+      message = String(errData.message ?? errData.title ?? message);
+    } catch {
+      // ignore
+    }
+    throw new Error(message);
+  }
+
+  return (await response.json()) as Record<string, unknown>;
+}
+
+export async function uploadMessageFile(
+  file: File
+): Promise<{ url: string; fileName: string }> {
+  const token = getAuthToken();
+  if (!token) {
+    clearAuthAndRedirectToLogin();
+    throw new Error("Token yok");
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`${API_BASE_URL}/api/messages/upload`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+
+  if (response.status === 401 || response.status === 403) {
+    clearAuthAndRedirectToLogin();
+    throw new Error("Yetkisiz");
+  }
+
+  if (!response.ok) {
+    let message = "Dosya yüklenemedi.";
+    try {
+      const errData = (await response.json()) as Record<string, unknown>;
+      message = String(errData.message ?? errData.title ?? message);
+    } catch {
+      // ignore
+    }
+    throw new Error(message);
+  }
+
+  const data = (await response.json()) as Record<string, unknown>;
+  return {
+    url: String(data.url ?? data.Url ?? ""),
+    fileName: String(data.fileName ?? data.FileName ?? file.name),
+  };
 }

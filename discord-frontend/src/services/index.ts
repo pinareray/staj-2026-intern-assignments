@@ -5,13 +5,17 @@ export {
   clearAuthAndRedirectToLogin,
   clearAuthStorage,
   deleteChannel,
+  deleteMessage,
+  editMessage,
   fetchCurrentUserProfile,
   fetchDmPeerReadAt,
   fetchDmUnreadTotal,
   getAuthToken,
+  leaveServer,
   logoutToLanding,
   markDmRead,
   searchUsers,
+  uploadMessageFile,
 } from "./api";
 export type { CachedUserProfile, UserSearchHit } from "./api";
 export { chatHub } from "./chatHub";
