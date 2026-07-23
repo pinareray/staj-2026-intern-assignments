@@ -8,12 +8,21 @@ import { useEffect, useState } from "react";
 function FloatingDecor() {
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+      {/* Yumuşak hareketli ışık lekeleri */}
+      <div className="absolute left-[-10%] top-[8%] h-[28rem] w-[28rem] rounded-full bg-[#ad2831]/20 blur-[100px] animate-glow-drift" />
+      <div className="absolute right-[-8%] top-[42%] h-[24rem] w-[24rem] rounded-full bg-[#5c1520]/35 blur-[90px] animate-glow-drift-delayed" />
+      <div className="absolute left-[20%] bottom-[5%] h-[20rem] w-[20rem] rounded-full bg-[#ad2831]/12 blur-[80px] animate-glow-drift" />
+
       <span className="absolute left-[8%] top-[18%] h-1.5 w-1.5 rounded-full bg-white/25 animate-float-slow" />
       <span className="absolute left-[22%] top-[72%] h-1 w-1 rounded-full bg-white/20 animate-float" />
       <span className="absolute right-[18%] top-[28%] h-1.5 w-1.5 rounded-full bg-[#ad2831]/40 animate-float-delayed" />
       <span className="absolute right-[12%] bottom-[22%] h-1 w-1 rounded-full bg-white/15 animate-float-slow" />
       <span className="absolute left-[48%] top-[12%] h-1 w-1 rounded-full bg-white/20 animate-pulse" />
       <span className="absolute left-[65%] bottom-[35%] h-1.5 w-1.5 rounded-full bg-white/10 animate-float" />
+      <span className="absolute left-[12%] top-[55%] h-1 w-1 rounded-full bg-white/20 animate-float-delayed" />
+      <span className="absolute right-[30%] top-[68%] h-1.5 w-1.5 rounded-full bg-[#e1bfbd]/25 animate-float-slow" />
+      <span className="absolute left-[78%] top-[48%] h-1 w-1 rounded-full bg-white/15 animate-pulse" />
+      <span className="absolute left-[40%] top-[88%] h-1.5 w-1.5 rounded-full bg-[#ad2831]/30 animate-float" />
 
       <svg
         className="absolute left-[14%] top-[42%] h-4 w-4 text-white/15 animate-float-slow"
@@ -53,6 +62,22 @@ function FloatingDecor() {
         fill="currentColor"
       >
         <circle cx="12" cy="12" r="4" />
+      </svg>
+      <svg
+        className="absolute right-[15%] top-[82%] h-3.5 w-3.5 text-white/15 animate-float-delayed"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+      >
+        <path d="M12 2l1.8 5.5H19l-4.4 3.2 1.7 5.3L12 13.8 7.7 16l1.7-5.3L5 7.5h5.2L12 2z" />
+      </svg>
+      <svg
+        className="absolute left-[55%] top-[38%] h-4 w-4 text-[#ad2831]/20 animate-float"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+      >
+        <path d="M12 5v14M5 12h14" />
       </svg>
     </div>
   );
@@ -191,176 +216,289 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section className="relative mx-auto w-full max-w-6xl px-5 pb-20 pt-4 sm:px-8 sm:pb-28">
-          <div className="mb-8 max-w-xl">
-            <p className="font-hanken text-xs font-semibold uppercase tracking-[0.22em] text-[#e1bfbd]/60">
-              Neler sunuyoruz
-            </p>
-            <h2 className="mt-2 font-libre text-3xl tracking-tight text-white sm:text-4xl">
-              Daha fazlası için tasarlandı
-            </h2>
+        {/* Discord tarzı kayan şerit */}
+        <div
+          className="relative z-10 w-full overflow-hidden border-y border-white/10 bg-[#1a080a]/55 py-4 backdrop-blur-md sm:py-5"
+          aria-hidden
+        >
+          <div className="flex w-max animate-marquee items-center gap-10 whitespace-nowrap will-change-transform">
+            {[0, 1].map((copy) => (
+              <div key={copy} className="flex items-center gap-10 pr-10">
+                {(
+                  [
+                    "SOHBET ET",
+                    "VAKİT GEÇİR",
+                    "KONUŞ",
+                    "SUNUCU KUR",
+                    "ARKADAŞ OL",
+                    "SES AÇ",
+                  ] as const
+                ).map((label) => (
+                  <span
+                    key={`${copy}-${label}`}
+                    className="inline-flex items-center gap-10"
+                  >
+                    <Image
+                      src="/micodex_logo.png?v=2"
+                      alt=""
+                      width={40}
+                      height={40}
+                      unoptimized
+                      aria-hidden
+                      className="h-8 w-8 shrink-0 rounded-lg object-contain sm:h-9 sm:w-9"
+                    />
+                    <span className="font-hanken text-lg font-extrabold italic uppercase tracking-wide text-white sm:text-xl md:text-2xl">
+                      {label}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            ))}
           </div>
+        </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:grid-rows-2 md:gap-5">
-            {/* Büyük kart — sol */}
-            <article className="group relative flex flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#1a0f10]/70 p-6 shadow-[0_0_0_1px_rgba(173,40,49,0)] backdrop-blur-sm transition-all duration-300 hover:scale-[1.02] hover:border-[#ad2831]/50 hover:shadow-[0_0_40px_rgba(173,40,49,0.25)] md:col-span-2 md:row-span-2 md:p-8">
-              <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-[#ad2831]/15 blur-3xl transition-opacity group-hover:opacity-100" />
-
-              <Image
-                src="/server-3d.png"
-                alt=""
-                width={512}
-                height={512}
-                aria-hidden
-                className="pointer-events-none absolute bottom-2 right-2 z-0 h-64 w-64 select-none object-contain drop-shadow-[0_20px_40px_rgba(0,0,0,0.45)] animate-float"
-              />
-
-              <span className="material-symbols-outlined relative z-10 text-3xl text-[#ad2831]">
-                hub
-              </span>
-              <h3 className="relative z-10 mt-4 font-libre text-2xl text-white sm:text-3xl">
-                Sınır Tanımayan Sunucular
-              </h3>
-              <p className="relative z-10 mt-2 max-w-md font-hanken text-sm leading-relaxed text-gray-400">
-                Kanallar oluştur, roller paylaş ve topluluğunu kendi kurallarınla
-                büyüt. Her sunucu senin sahnen.
+        {/* Discord tarzı feature bantları — hero ile aynı arka plan */}
+        <section className="relative z-10 text-white">
+          <div className="mx-auto grid w-full max-w-6xl grid-cols-1 items-center gap-10 px-6 py-16 sm:px-10 sm:py-24 lg:grid-cols-2 lg:gap-16">
+            <div className="order-2 lg:order-1 animate-fade-up">
+              <h2 className="font-hanken text-3xl font-extrabold uppercase leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-5xl">
+                Kendi alanını kur,
+                <br />
+                topluluğunu büyüt
+              </h2>
+              <p className="mt-6 max-w-md font-hanken text-base leading-relaxed text-gray-300 sm:text-lg">
+                Sunucular oluştur, kanallar aç ve rollerle düzeni sen belirle.
+                Her sunucu senin sahnen — arkadaşlarınla veya tüm topluluğunla.
               </p>
-
-              <div className="pointer-events-none mt-6 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/5 bg-[#0c0708]/40 opacity-25">
-                <div className="flex items-center gap-2 border-b border-white/5 px-4 py-2.5">
-                  <span className="h-2 w-2 rounded-full bg-[#ad2831]" />
-                  <span className="font-hanken text-xs text-[#e1bfbd]/70">
-                    # genel
-                  </span>
-                  <span className="ml-auto font-hanken text-[10px] text-white/30">
-                    canlı
-                  </span>
-                </div>
-                <div className="flex flex-1 flex-col gap-3 p-4">
-                  <div className="flex items-start gap-2.5">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#ad2831]/25 font-libre text-xs font-bold text-[#ad2831]">
-                      A
-                    </div>
-                    <div>
-                      <p className="font-hanken text-xs font-semibold text-white">
-                        ayse{" "}
-                        <span className="font-normal text-white/30">
-                          bugün 14:02
-                        </span>
-                      </p>
-                      <p className="mt-0.5 rounded-xl rounded-tl-sm bg-white/5 px-3 py-2 font-hanken text-sm text-gray-300">
-                        Yeni sunucu harika olmuş!
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2.5">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 font-libre text-xs font-bold text-white/70">
-                      M
-                    </div>
-                    <div>
-                      <p className="font-hanken text-xs font-semibold text-white">
-                        mert{" "}
-                        <span className="font-normal text-white/30">
-                          bugün 14:03
-                        </span>
-                      </p>
-                      <p className="mt-0.5 rounded-xl rounded-tl-sm bg-[#ad2831]/20 px-3 py-2 font-hanken text-sm text-gray-200">
-                        #duyurular kanalına da bak 🔥
-                      </p>
-                    </div>
-                  </div>
-                  <div className="mt-auto flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2">
-                    <span className="font-hanken text-xs text-white/35">
-                      Mesaj yaz...
+            </div>
+            <div className="order-1 relative mx-auto w-full max-w-lg lg:order-2 animate-float-slow">
+              <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-gradient-to-br from-[#7a1a22]/90 via-[#4a0f14]/80 to-[#1a080a]/90 p-6 shadow-[0_24px_60px_rgba(0,0,0,0.45)] backdrop-blur-sm sm:p-8">
+                <div className="pointer-events-none absolute -left-10 bottom-0 h-40 w-40 rounded-full bg-[#ad2831]/40 blur-3xl animate-glow-pulse" />
+                <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#f2ebe6] shadow-xl">
+                  <div className="flex items-center gap-2 border-b border-stone-200/80 bg-white px-4 py-2.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-[#ad2831]" />
+                    <span className="font-hanken text-xs font-semibold text-stone-700">
+                      # genel
                     </span>
                   </div>
-                </div>
-              </div>
-            </article>
-
-            {/* Sağ üst */}
-            <article className="group relative flex flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#1a0f10]/70 p-6 backdrop-blur-sm transition-all duration-300 hover:scale-[1.03] hover:border-[#ad2831]/50 hover:shadow-[0_0_36px_rgba(173,40,49,0.28)] md:col-span-1">
-              <div className="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full bg-[#ad2831]/20 blur-2xl opacity-60 transition-opacity group-hover:opacity-100" />
-
-              <Image
-                src="/lightning-3d.png"
-                alt=""
-                width={256}
-                height={256}
-                aria-hidden
-                className="pointer-events-none absolute -bottom-4 -right-4 z-0 h-32 w-32 select-none object-contain opacity-80 drop-shadow-[0_12px_24px_rgba(0,0,0,0.4)] animate-float"
-              />
-
-              <div className="relative z-10 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#ad2831]/15">
-                <span className="material-symbols-outlined text-[#ad2831]">
-                  bolt
-                </span>
-              </div>
-              <h3 className="relative z-10 mt-4 font-libre text-xl text-white">
-                Gerçek Zamanlı İletişim
-              </h3>
-              <p className="relative z-10 mt-2 font-hanken text-sm leading-relaxed text-gray-400">
-                SignalR ile mesajlar anında akar. Gecikme yok, yenileme yok —
-                sohbet canlı kalır.
-              </p>
-              <div className="relative z-10 mt-5 flex items-center gap-2">
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
-                </span>
-                <span className="font-hanken text-xs font-medium text-emerald-400/90">
-                  SignalR bağlı
-                </span>
-              </div>
-            </article>
-
-            {/* Sağ alt */}
-            <article className="group relative flex flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#1a0f10]/70 p-6 backdrop-blur-sm transition-all duration-300 hover:scale-[1.03] hover:border-[#ad2831]/50 hover:shadow-[0_0_36px_rgba(173,40,49,0.28)] md:col-span-1">
-              <div className="pointer-events-none absolute -right-8 -bottom-8 h-28 w-28 rounded-full bg-[#ad2831]/15 blur-2xl opacity-50 transition-opacity group-hover:opacity-100" />
-
-              <Image
-                src="/archive-3d.png"
-                alt=""
-                width={256}
-                height={256}
-                aria-hidden
-                className="pointer-events-none absolute -bottom-3 -right-3 z-0 h-32 w-32 select-none object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.4)] animate-float"
-              />
-
-              <div className="relative z-10 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#ad2831]/15">
-                <span className="material-symbols-outlined text-[#ad2831]">
-                  person
-                </span>
-              </div>
-              <h3 className="relative z-10 mt-4 font-libre text-xl text-white">
-                Sana Özel Arşiv
-              </h3>
-              <p className="relative z-10 mt-2 font-hanken text-sm leading-relaxed text-gray-400">
-                Profilini özelleştir, arkadaşlarını yönet ve kendi alanını
-                oluştur. MiCodex seni hatırlar.
-              </p>
-              <div className="relative z-10 mt-5 flex -space-x-2">
-                {["P", "D", "A", "M"].map((letter, i) => (
-                  <div
-                    key={letter}
-                    className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#1a0f10] font-libre text-xs font-bold text-white"
-                    style={{
-                      backgroundColor:
-                        i % 2 === 0
-                          ? "rgba(173,40,49,0.45)"
-                          : "rgba(255,255,255,0.12)",
-                    }}
-                  >
-                    {letter}
+                  <div className="space-y-3 p-4">
+                    <div className="flex items-start gap-2.5">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#ad2831]/20 font-hanken text-xs font-bold text-[#ad2831]">
+                        A
+                      </div>
+                      <div>
+                        <p className="font-hanken text-xs font-semibold text-stone-800">
+                          ayse{" "}
+                          <span className="font-normal text-stone-400">
+                            bugün 14:02
+                          </span>
+                        </p>
+                        <p className="mt-1 rounded-xl rounded-tl-sm bg-white px-3 py-2 font-hanken text-sm text-stone-700 shadow-sm">
+                          Yeni sunucu harika olmuş!
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-stone-200 font-hanken text-xs font-bold text-stone-600">
+                        M
+                      </div>
+                      <div>
+                        <p className="font-hanken text-xs font-semibold text-stone-800">
+                          mert{" "}
+                          <span className="font-normal text-stone-400">
+                            bugün 14:03
+                          </span>
+                        </p>
+                        <p className="mt-1 rounded-xl rounded-tl-sm bg-[#ad2831]/10 px-3 py-2 font-hanken text-sm text-stone-800">
+                          #duyurular kanalına da bak
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-2">
+                      <span className="font-hanken text-xs text-stone-400">
+                        Mesaj yaz...
+                      </span>
+                    </div>
                   </div>
-                ))}
-                <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#1a0f10] bg-white/10 font-hanken text-[10px] text-white/60">
-                  +
                 </div>
+                <Image
+                  src="/server-3d.png"
+                  alt=""
+                  width={280}
+                  height={280}
+                  aria-hidden
+                  className="pointer-events-none absolute -bottom-6 -right-4 h-36 w-36 select-none object-contain drop-shadow-2xl animate-float sm:h-44 sm:w-44"
+                />
               </div>
-            </article>
+            </div>
           </div>
         </section>
+
+        <section className="relative z-10 text-white">
+          <div className="mx-auto grid w-full max-w-6xl grid-cols-1 items-center gap-10 px-6 py-16 sm:px-10 sm:py-24 lg:grid-cols-2 lg:gap-16">
+            <div className="relative mx-auto w-full max-w-lg animate-float">
+              <div className="relative overflow-visible rounded-[2rem] border border-white/10 bg-gradient-to-br from-[#2a1216]/90 via-[#5c1520]/85 to-[#ad2831]/70 p-6 pb-10 shadow-[0_24px_60px_rgba(173,40,49,0.3)] backdrop-blur-sm sm:p-8 sm:pb-12">
+                <div className="pointer-events-none absolute right-0 top-0 h-32 w-32 rounded-full bg-white/10 blur-2xl animate-glow-pulse" />
+                <div className="relative z-10 flex flex-col items-center gap-4">
+                  <div className="flex w-full items-center justify-between rounded-2xl bg-white/95 px-4 py-3 shadow-lg">
+                    <div className="flex items-center gap-2">
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                      </span>
+                      <span className="font-hanken text-sm font-semibold text-stone-800">
+                        Bağlı
+                      </span>
+                    </div>
+                    <span className="rounded-full bg-[#ad2831]/10 px-2.5 py-1 font-hanken text-[10px] font-bold uppercase tracking-wide text-[#ad2831]">
+                      canlı
+                    </span>
+                  </div>
+                  <div className="flex w-full flex-col gap-2 rounded-2xl bg-[#14080a]/50 p-4 backdrop-blur-sm">
+                    {["ayse yazıyor...", "mert: selam!", "yeni mesaj · anında"].map(
+                      (line, i) => (
+                        <div
+                          key={line}
+                          className="flex items-center gap-3 rounded-xl bg-white/95 px-3 py-2.5 shadow-sm animate-fade-up"
+                          style={{ animationDelay: `${i * 0.12}s` }}
+                        >
+                          <span className="material-symbols-outlined text-lg text-[#ad2831]">
+                            {i === 0 ? "edit" : i === 1 ? "chat" : "bolt"}
+                          </span>
+                          <span className="font-hanken text-sm text-stone-700">
+                            {line}
+                          </span>
+                        </div>
+                      )
+                    )}
+                  </div>
+                </div>
+                <Image
+                  src="/lightning-3d.png"
+                  alt=""
+                  width={220}
+                  height={220}
+                  aria-hidden
+                  className="pointer-events-none absolute -bottom-10 -right-8 z-20 h-36 w-36 select-none object-contain drop-shadow-[0_16px_32px_rgba(0,0,0,0.55)] animate-float-delayed sm:-bottom-12 sm:-right-10 sm:h-44 sm:w-44"
+                />
+              </div>
+            </div>
+            <div className="animate-fade-up-delayed">
+              <h2 className="font-hanken text-3xl font-extrabold uppercase leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-5xl">
+                Gerçek zamanlı
+                <br />
+                sohbet, sıfır gecikme
+              </h2>
+              <p className="mt-6 max-w-md font-hanken text-base leading-relaxed text-gray-300 sm:text-lg">
+                SignalR ile mesajlar anında akar. Sayfa yenilemeye gerek yok —
+                yazdığın anda arkadaşların görür, sohbet canlı kalır.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="relative z-10 px-5 py-16 sm:px-8 sm:py-24">
+          <div className="relative mx-auto max-w-6xl overflow-visible rounded-[2.5rem] border border-white/10 bg-gradient-to-br from-[#3a0d14]/80 via-[#1a080a]/70 to-[#2a1018]/80 px-6 py-12 shadow-[0_40px_80px_rgba(0,0,0,0.45)] backdrop-blur-md sm:px-10 sm:py-16 lg:px-14 animate-float-slow">
+            <div className="pointer-events-none absolute -bottom-24 -left-16 h-72 w-72 rounded-full bg-[#ad2831]/25 blur-3xl animate-glow-drift" />
+            <div className="pointer-events-none absolute -right-20 top-0 h-64 w-64 rounded-full bg-[#5c1520]/50 blur-3xl animate-glow-drift-delayed" />
+
+            <div className="relative grid grid-cols-1 items-center gap-12 lg:grid-cols-2 lg:gap-10">
+              <div className="relative mx-auto w-full max-w-md">
+                <div className="relative overflow-visible rounded-[1.75rem] bg-gradient-to-b from-[#ad2831] to-[#5c1520] p-5 pb-10 pt-10 sm:p-6 sm:pb-12 sm:pt-12">
+                  <div className="absolute left-1/2 top-0 z-20 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-2xl border-4 border-[#3a0d14] bg-[#e1bfbd] shadow-lg animate-float">
+                    <span className="material-symbols-outlined text-2xl text-[#ad2831]">
+                      groups
+                    </span>
+                  </div>
+
+                  <div className="relative z-10 overflow-hidden rounded-2xl bg-[#f5f0ea] shadow-xl">
+                    <div className="border-b border-stone-200 px-4 py-3">
+                      <p className="font-hanken text-sm font-bold text-stone-800">
+                        Arkadaşlar
+                      </p>
+                      <p className="font-hanken text-[11px] text-stone-400">
+                        Çevrimiçi — 3
+                      </p>
+                    </div>
+                    <div className="space-y-2 p-3">
+                      {[
+                        { l: "P", n: "pinar_ery", s: "Çevrimiçi" },
+                        { l: "D", n: "defnesu", s: "Ses kanalında" },
+                        { l: "A", n: "ayse", s: "Boşta" },
+                      ].map((u, i) => (
+                        <div
+                          key={u.n}
+                          className="flex items-center gap-3 rounded-xl bg-white px-3 py-2 shadow-sm"
+                        >
+                          <div
+                            className="flex h-9 w-9 items-center justify-center rounded-full font-hanken text-xs font-bold text-white"
+                            style={{
+                              backgroundColor:
+                                i === 1 ? "#ad2831" : "rgba(36,39,42,0.75)",
+                            }}
+                          >
+                            {u.l}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-hanken text-sm font-semibold text-stone-800">
+                              {u.n}
+                            </p>
+                            <p className="font-hanken text-[11px] text-stone-400">
+                              {u.s}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="absolute -left-3 top-16 z-20 flex flex-col gap-2">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-xs font-bold text-[#ad2831] shadow-lg animate-float">
+                      1
+                    </span>
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-xs font-bold text-stone-700 shadow-lg animate-float-delayed">
+                      3
+                    </span>
+                  </div>
+
+                  <Image
+                    src="/archive-3d.png"
+                    alt=""
+                    width={220}
+                    height={220}
+                    aria-hidden
+                    className="pointer-events-none absolute -bottom-10 -right-8 z-20 h-36 w-36 select-none object-contain drop-shadow-[0_16px_32px_rgba(0,0,0,0.55)] animate-float-slow sm:-bottom-12 sm:-right-10 sm:h-44 sm:w-44"
+                  />
+                </div>
+              </div>
+
+              <div className="text-white lg:pl-4">
+                <h2 className="font-hanken text-3xl font-extrabold uppercase leading-[1.05] tracking-tight sm:text-4xl lg:text-5xl">
+                  Grup sohbetlerini
+                  <br />
+                  daha eğlenceli hâle getir
+                </h2>
+                <p className="mt-6 max-w-md font-hanken text-base leading-relaxed text-white/75 sm:text-lg">
+                  Profilini özelleştir, arkadaşlarını yönet, DM’leş ve sunucu
+                  davetleriyle kendi çemberini kur. MiCodex seni hatırlar.
+                </p>
+                <Link
+                  href="/register"
+                  className="mt-8 inline-flex items-center justify-center rounded-full bg-white px-7 py-3.5 font-hanken text-sm font-semibold text-stone-900 transition-all hover:scale-[1.02] hover:bg-[#f5f0ea] hover:shadow-lg hover:shadow-white/10"
+                >
+                  Hemen katıl
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <footer className="relative z-10 border-t border-white/5 px-6 py-10 text-center">
+          <p className="font-libre text-lg text-white">micodex</p>
+          <p className="mt-2 font-hanken text-xs text-white/40">
+            Arkadaşlarınla bir arada ol.
+          </p>
+        </footer>
       </main>
     </div>
   );
