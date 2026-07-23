@@ -183,6 +183,20 @@ using (var scope = app.Services.CreateScope())
         CREATE INDEX IF NOT EXISTS "IX_ServerInvites_InviteeId" ON "ServerInvites" ("InviteeId");
         CREATE INDEX IF NOT EXISTS "IX_ServerInvites_ServerId_InviteeId_Status" ON "ServerInvites" ("ServerId", "InviteeId", "Status");
 
+        CREATE TABLE IF NOT EXISTS "ServerInviteLinks" (
+            "Id" uuid NOT NULL,
+            "ServerId" uuid NOT NULL,
+            "CreatedByUserId" uuid NOT NULL,
+            "Code" character varying(32) NOT NULL,
+            "CreatedAt" timestamp with time zone NOT NULL,
+            "UseCount" integer NOT NULL DEFAULT 0,
+            CONSTRAINT "PK_ServerInviteLinks" PRIMARY KEY ("Id"),
+            CONSTRAINT "FK_ServerInviteLinks_Servers_ServerId" FOREIGN KEY ("ServerId") REFERENCES "Servers" ("Id") ON DELETE CASCADE,
+            CONSTRAINT "FK_ServerInviteLinks_Users_CreatedByUserId" FOREIGN KEY ("CreatedByUserId") REFERENCES "Users" ("Id") ON DELETE RESTRICT
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS "IX_ServerInviteLinks_Code" ON "ServerInviteLinks" ("Code");
+        CREATE INDEX IF NOT EXISTS "IX_ServerInviteLinks_ServerId" ON "ServerInviteLinks" ("ServerId");
+
         ALTER TABLE "Users" ADD COLUMN IF NOT EXISTS "IsPlatformAdmin" boolean NOT NULL DEFAULT false;
 
         CREATE TABLE IF NOT EXISTS "UserBlocks" (

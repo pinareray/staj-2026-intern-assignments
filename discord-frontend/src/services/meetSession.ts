@@ -1,15 +1,21 @@
 import { chatHub } from "@/services/chatHub";
 
-export type VoicePeerState = "connecting" | "connected" | "failed";
+export type MeetPeerState = "connecting" | "connected" | "failed";
 
-export type VoiceSessionState = {
+export type MeetSessionStreams = {
+  local: MediaStream | null;
+  remotes: Record<string, MediaStream>;
+};
+
+export type MeetSessionState = {
   muted: boolean;
-  deafened: boolean;
-  peerStates: Record<string, VoicePeerState>;
+  cameraOn: boolean;
+  peerStates: Record<string, MeetPeerState>;
+  peerHasVideo: Record<string, boolean>;
   error: string | null;
 };
 
-type VoiceSignalPayload = {
+type MeetSignalPayload = {
   type: "offer" | "answer" | "ice";
   sdp?: RTCSessionDescriptionInit;
   candidate?: RTCIceCandidateInit | null;
@@ -17,16 +23,17 @@ type VoiceSignalPayload = {
 
 type PeerSlot = {
   pc: RTCPeerConnection;
-  remoteAudio: HTMLAudioElement;
+  remoteStream: MediaStream;
   makingOffer: boolean;
   ignoreOffer: boolean;
   polite: boolean;
 };
 
-type VoiceSessionOptions = {
-  channelId: string;
+type MeetSessionOptions = {
+  roomCode: string;
   localUserId: string;
-  onStateChange?: (state: VoiceSessionState) => void;
+  onStateChange?: (state: MeetSessionState) => void;
+  onStreamsChange?: (streams: MeetSessionStreams) => void;
 };
 
 const ICE_SERVERS: RTCIceServer[] = [
@@ -38,16 +45,17 @@ function asRecord(raw: unknown): Record<string, unknown> {
   return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
 }
 
-/** Mesh WebRTC — sadece ses (kanal odası). */
-export class VoiceSession {
-  private readonly channelId: string;
+/** Google Meet tarzı mesh WebRTC — ses + görüntü, link ile oda. */
+export class MeetSession {
+  private readonly roomCode: string;
   private readonly localUserId: string;
-  private readonly onStateChange?: (state: VoiceSessionState) => void;
+  private readonly onStateChange?: (state: MeetSessionState) => void;
+  private readonly onStreamsChange?: (streams: MeetSessionStreams) => void;
 
   private localStream: MediaStream | null = null;
   private peers = new Map<string, PeerSlot>();
   private muted = false;
-  private deafened = false;
+  private cameraOn = true;
   private error: string | null = null;
   private stopped = false;
 
@@ -56,14 +64,17 @@ export class VoiceSession {
   private unsubLeft: (() => void) | null = null;
   private unsubRoster: (() => void) | null = null;
 
-  constructor(options: VoiceSessionOptions) {
-    this.channelId = options.channelId;
+  constructor(options: MeetSessionOptions) {
+    this.roomCode = options.roomCode;
     this.localUserId = options.localUserId;
     this.onStateChange = options.onStateChange;
+    this.onStreamsChange = options.onStreamsChange;
   }
 
-  getState(): VoiceSessionState {
-    const peerStates: Record<string, VoicePeerState> = {};
+  getState(): MeetSessionState {
+    const peerStates: Record<string, MeetPeerState> = {};
+    const peerHasVideo: Record<string, boolean> = {};
+
     this.peers.forEach((slot, peerId) => {
       const ice = slot.pc.iceConnectionState;
       if (ice === "connected" || ice === "completed") {
@@ -73,23 +84,41 @@ export class VoiceSession {
       } else {
         peerStates[peerId] = "connecting";
       }
+      peerHasVideo[peerId] = slot.remoteStream
+        .getVideoTracks()
+        .some((t) => t.readyState === "live" && t.enabled);
     });
 
     return {
       muted: this.muted,
-      deafened: this.deafened,
+      cameraOn: this.cameraOn,
       peerStates,
+      peerHasVideo,
       error: this.error,
     };
+  }
+
+  getStreams(): MeetSessionStreams {
+    const remotes: Record<string, MediaStream> = {};
+    this.peers.forEach((slot, peerId) => {
+      remotes[peerId] = slot.remoteStream;
+    });
+    return { local: this.localStream, remotes };
   }
 
   private emit() {
     this.onStateChange?.(this.getState());
   }
 
+  private emitStreams() {
+    this.onStreamsChange?.(this.getStreams());
+    this.emit();
+  }
+
   async start(): Promise<void> {
     this.stopped = false;
     this.error = null;
+    this.cameraOn = true;
 
     try {
       this.localStream = await navigator.mediaDevices.getUserMedia({
@@ -98,31 +127,44 @@ export class VoiceSession {
           noiseSuppression: true,
           autoGainControl: true,
         },
-        video: false,
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          facingMode: "user",
+        },
       });
     } catch {
-      this.error =
-        "Mikrofon izni alınamadı. Tarayıcı ayarlarından mikrofona izin ver.";
-      this.emit();
-      throw new Error(this.error);
+      try {
+        this.localStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: false,
+        });
+        this.cameraOn = false;
+      } catch {
+        this.error =
+          "Mikrofon/kamera izni alınamadı. Tarayıcı ayarlarını kontrol et.";
+        this.emit();
+        throw new Error(this.error);
+      }
     }
 
-    this.applyMuteToLocalTracks();
+    this.applyMute();
+    this.emitStreams();
 
-    this.unsubSignal = chatHub.subscribe("VoiceSignal", (raw) => {
-      void this.onVoiceSignal(raw);
+    this.unsubSignal = chatHub.subscribe("MeetSignal", (raw) => {
+      void this.onSignal(raw);
     });
-    this.unsubJoined = chatHub.subscribe("VoicePeerJoined", (raw) => {
+    this.unsubJoined = chatHub.subscribe("MeetPeerJoined", (raw) => {
       void this.onPeerJoined(raw);
     });
-    this.unsubLeft = chatHub.subscribe("VoicePeerLeft", (raw) => {
+    this.unsubLeft = chatHub.subscribe("MeetPeerLeft", (raw) => {
       this.onPeerLeft(raw);
     });
-    this.unsubRoster = chatHub.subscribe("VoiceRosterUpdated", (raw) => {
+    this.unsubRoster = chatHub.subscribe("MeetRosterUpdated", (raw) => {
       void this.onRoster(raw);
     });
 
-    await chatHub.invoke("JoinVoice", this.channelId);
+    await chatHub.invoke("JoinMeet", this.roomCode);
     this.emit();
   }
 
@@ -140,62 +182,97 @@ export class VoiceSession {
     this.unsubRoster = null;
 
     [...this.peers.keys()].forEach((id) => this.closePeer(id));
-
     this.localStream?.getTracks().forEach((t) => t.stop());
     this.localStream = null;
+    this.cameraOn = false;
 
     try {
-      await chatHub.invoke("LeaveVoice", this.channelId);
+      await chatHub.invoke("LeaveMeet", this.roomCode);
     } catch {
       // ignore
     }
 
-    this.emit();
+    this.emitStreams();
   }
 
   setMuted(muted: boolean) {
     this.muted = muted;
-    this.applyMuteToLocalTracks();
+    this.applyMute();
     this.emit();
   }
 
-  setDeafened(deafened: boolean) {
-    this.deafened = deafened;
-    this.peers.forEach((slot) => {
-      slot.remoteAudio.muted = deafened;
-    });
-    this.emit();
+  async setCameraOn(on: boolean): Promise<void> {
+    if (this.stopped || !this.localStream) return;
+    if (on === this.cameraOn) return;
+
+    if (on) {
+      try {
+        const cam = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: false,
+        });
+        const track = cam.getVideoTracks()[0];
+        if (!track) throw new Error("Kamera yok");
+        this.localStream.addTrack(track);
+        this.cameraOn = true;
+        for (const peerId of [...this.peers.keys()]) {
+          const slot = this.peers.get(peerId);
+          if (!slot) continue;
+          slot.pc.addTrack(track, this.localStream);
+          await this.createAndSendOffer(peerId);
+        }
+      } catch {
+        this.error = "Kamera açılamadı.";
+        this.emit();
+        throw new Error(this.error);
+      }
+    } else {
+      for (const track of this.localStream.getVideoTracks()) {
+        this.peers.forEach((slot) => {
+          slot.pc.getSenders().forEach((sender) => {
+            if (sender.track === track) {
+              try {
+                slot.pc.removeTrack(sender);
+              } catch {
+                // ignore
+              }
+            }
+          });
+        });
+        track.stop();
+        this.localStream.removeTrack(track);
+      }
+      this.cameraOn = false;
+      for (const peerId of [...this.peers.keys()]) {
+        await this.createAndSendOffer(peerId);
+      }
+    }
+
+    this.emitStreams();
   }
 
-  private applyMuteToLocalTracks() {
-    this.localStream?.getAudioTracks().forEach((track) => {
-      track.enabled = !this.muted;
+  private applyMute() {
+    this.localStream?.getAudioTracks().forEach((t) => {
+      t.enabled = !this.muted;
     });
   }
 
-  private isPoliteToward(peerId: string): boolean {
+  private isPoliteToward(peerId: string) {
     return this.localUserId < peerId;
   }
 
   private async ensurePeer(peerId: string): Promise<PeerSlot | null> {
     if (this.stopped || peerId === this.localUserId) return null;
-
     const existing = this.peers.get(peerId);
     if (existing) return existing;
     if (!this.localStream) return null;
 
     const polite = this.isPoliteToward(peerId);
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-    const remoteAudio = document.createElement("audio");
-    remoteAudio.autoplay = true;
-    remoteAudio.setAttribute("playsinline", "true");
-    remoteAudio.muted = this.deafened;
-    remoteAudio.style.display = "none";
-    document.body.appendChild(remoteAudio);
-
+    const remoteStream = new MediaStream();
     const slot: PeerSlot = {
       pc,
-      remoteAudio,
+      remoteStream,
       makingOffer: false,
       ignoreOffer: false,
       polite,
@@ -214,17 +291,24 @@ export class VoiceSession {
     };
 
     pc.ontrack = (event) => {
-      const [stream] = event.streams;
-      if (stream) {
-        remoteAudio.srcObject = stream;
-        void remoteAudio.play().catch(() => undefined);
+      const track = event.track;
+      if (!slot.remoteStream.getTracks().some((t) => t.id === track.id)) {
+        slot.remoteStream.addTrack(track);
       }
+      track.onended = () => {
+        try {
+          slot.remoteStream.removeTrack(track);
+        } catch {
+          // ignore
+        }
+        this.emitStreams();
+      };
+      this.emitStreams();
     };
 
     pc.onconnectionstatechange = () => this.emit();
     pc.oniceconnectionstatechange = () => this.emit();
-
-    this.emit();
+    this.emitStreams();
     return slot;
   }
 
@@ -234,17 +318,21 @@ export class VoiceSession {
     slot.pc.onicecandidate = null;
     slot.pc.ontrack = null;
     slot.pc.close();
-    slot.remoteAudio.pause();
-    slot.remoteAudio.srcObject = null;
-    slot.remoteAudio.remove();
+    slot.remoteStream.getTracks().forEach((t) => {
+      try {
+        slot.remoteStream.removeTrack(t);
+      } catch {
+        // ignore
+      }
+    });
     this.peers.delete(peerId);
-    this.emit();
+    this.emitStreams();
   }
 
-  private async sendSignal(targetUserId: string, payload: VoiceSignalPayload) {
+  private async sendSignal(targetUserId: string, payload: MeetSignalPayload) {
     await chatHub.invoke(
-      "SendVoiceSignal",
-      this.channelId,
+      "SendMeetSignal",
+      this.roomCode,
       targetUserId,
       payload
     );
@@ -253,7 +341,6 @@ export class VoiceSession {
   private async createAndSendOffer(peerId: string) {
     const slot = await this.ensurePeer(peerId);
     if (!slot || this.stopped) return;
-
     try {
       slot.makingOffer = true;
       const offer = await slot.pc.createOffer();
@@ -263,8 +350,8 @@ export class VoiceSession {
         sdp: slot.pc.localDescription ?? offer,
       });
     } catch (err) {
-      console.warn("[VoiceSession] offer failed", peerId, err);
-      this.error = "Ses bağlantısı kurulamadı.";
+      console.warn("[MeetSession] offer failed", peerId, err);
+      this.error = "Görüşme bağlantısı kurulamadı.";
       this.emit();
     } finally {
       slot.makingOffer = false;
@@ -274,8 +361,8 @@ export class VoiceSession {
   private async onRoster(raw: unknown) {
     if (this.stopped) return;
     const payload = asRecord(raw);
-    const id = String(payload.channelId ?? payload.ChannelId ?? "");
-    if (id !== this.channelId) return;
+    const code = String(payload.roomCode ?? payload.RoomCode ?? "");
+    if (code !== this.roomCode) return;
 
     const list = Array.isArray(payload.participants)
       ? payload.participants
@@ -289,7 +376,6 @@ export class VoiceSession {
       const peerId = String(rec.userId ?? rec.UserId ?? "");
       if (!peerId || peerId === this.localUserId) continue;
       remoteIds.add(peerId);
-
       if (this.localUserId > peerId && !this.peers.has(peerId)) {
         await this.createAndSendOffer(peerId);
       } else {
@@ -305,32 +391,27 @@ export class VoiceSession {
   private async onPeerJoined(raw: unknown) {
     if (this.stopped) return;
     const payload = asRecord(raw);
-    const id = String(payload.channelId ?? payload.ChannelId ?? "");
-    if (id !== this.channelId) return;
-
+    const code = String(payload.roomCode ?? payload.RoomCode ?? "");
+    if (code !== this.roomCode) return;
     const peerId = String(payload.userId ?? payload.UserId ?? "");
     if (!peerId || peerId === this.localUserId) return;
-
-    if (this.localUserId > peerId) {
-      await this.createAndSendOffer(peerId);
-    } else {
-      await this.ensurePeer(peerId);
-    }
+    if (this.localUserId > peerId) await this.createAndSendOffer(peerId);
+    else await this.ensurePeer(peerId);
   }
 
   private onPeerLeft(raw: unknown) {
     const payload = asRecord(raw);
-    const id = String(payload.channelId ?? payload.ChannelId ?? "");
-    if (id !== this.channelId) return;
+    const code = String(payload.roomCode ?? payload.RoomCode ?? "");
+    if (code !== this.roomCode) return;
     const peerId = String(payload.userId ?? payload.UserId ?? "");
     if (peerId) this.closePeer(peerId);
   }
 
-  private async onVoiceSignal(raw: unknown) {
+  private async onSignal(raw: unknown) {
     if (this.stopped) return;
     const envelope = asRecord(raw);
-    const id = String(envelope.channelId ?? envelope.ChannelId ?? "");
-    if (id !== this.channelId) return;
+    const code = String(envelope.roomCode ?? envelope.RoomCode ?? "");
+    if (code !== this.roomCode) return;
 
     const fromUserId = String(
       envelope.fromUserId ?? envelope.FromUserId ?? ""
@@ -353,12 +434,10 @@ export class VoiceSession {
           | RTCSessionDescriptionInit
           | undefined;
         if (!sdp) return;
-
         const offerCollision =
           slot.makingOffer || slot.pc.signalingState !== "stable";
         slot.ignoreOffer = !slot.polite && offerCollision;
         if (slot.ignoreOffer) return;
-
         await slot.pc.setRemoteDescription(sdp);
         const answer = await slot.pc.createAnswer();
         await slot.pc.setLocalDescription(answer);
@@ -383,16 +462,20 @@ export class VoiceSession {
           try {
             await slot.pc.addIceCandidate(candidate);
           } catch (err) {
-            if (!slot.ignoreOffer) {
-              console.warn("[VoiceSession] ice failed", err);
-            }
+            if (!slot.ignoreOffer) console.warn("[MeetSession] ice", err);
           }
         }
       }
     } catch (err) {
-      console.warn("[VoiceSession] signal handling failed", err);
-      this.error = "Ses sinyali işlenemedi.";
+      console.warn("[MeetSession] signal failed", err);
+      this.error = "Görüşme sinyali işlenemedi.";
       this.emit();
     }
   }
+}
+
+export function generateMeetCode(length = 8): string {
+  const alphabet = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = crypto.getRandomValues(new Uint8Array(length));
+  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
 }

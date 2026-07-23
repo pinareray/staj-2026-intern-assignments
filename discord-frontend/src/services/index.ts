@@ -20,8 +20,10 @@ export {
 export type { CachedUserProfile, UserSearchHit } from "./api";
 export { chatHub } from "./chatHub";
 export { VoiceSession } from "./voiceSession";
+export type { VoicePeerState, VoiceSessionState } from "./voiceSession";
+export { MeetSession, generateMeetCode } from "./meetSession";
 export type {
-  VoicePeerState,
-  VoiceSessionState,
-  VoiceSessionStreams,
-} from "./voiceSession";
+  MeetPeerState,
+  MeetSessionState,
+  MeetSessionStreams,
+} from "./meetSession";

@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { FormEvent, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { FormEvent, Suspense, useMemo, useState } from "react";
 import AuthCard from "@/components/auth/AuthCard";
 import AuthDivider from "@/components/auth/AuthDivider";
 import AuthField from "@/components/auth/AuthField";
@@ -15,8 +15,10 @@ import {
 } from "@/lib/authValidation";
 import { cacheCurrentUserProfile, API_BASE_URL } from "@/services";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnUrl = searchParams.get("returnUrl");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -71,7 +73,12 @@ export default function LoginPage() {
 
       localStorage.setItem("token", token);
       await cacheCurrentUserProfile();
-      router.push("/app");
+
+      const safeReturn =
+        returnUrl && returnUrl.startsWith("/") && !returnUrl.startsWith("//")
+          ? returnUrl
+          : "/app";
+      router.push(safeReturn);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         setError(
@@ -166,5 +173,19 @@ export default function LoginPage() {
         </p>
       </AuthCard>
     </AuthShell>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-[#14080a] text-[#e1bfbd]/70">
+          <p className="font-hanken text-sm">Yükleniyor...</p>
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

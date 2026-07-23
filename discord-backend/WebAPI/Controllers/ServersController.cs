@@ -1,6 +1,7 @@
 using Application.Features.Channels.Queries.GetChannelsByServer;
 using Application.Features.Servers.Commands.AcceptInvite;
 using Application.Features.Servers.Commands.AddMember;
+using Application.Features.Servers.Commands.CreateInviteLink;
 using Application.Features.Servers.Commands.CreateServer;
 using Application.Features.Servers.Commands.LeaveServer;
 using Application.Features.Servers.Commands.RejectInvite;
@@ -121,6 +122,23 @@ namespace WebAPI.Controllers
             try
             {
                 var result = await _mediator.Send(new GetServerPendingInvitesQuery
+                {
+                    ServerId = serverId
+                });
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("{serverId:guid}/invite-link")]
+        public async Task<IActionResult> CreateInviteLink(Guid serverId)
+        {
+            try
+            {
+                var result = await _mediator.Send(new CreateInviteLinkCommand
                 {
                     ServerId = serverId
                 });

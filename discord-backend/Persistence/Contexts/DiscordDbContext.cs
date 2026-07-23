@@ -19,6 +19,7 @@ namespace Persistence.Contexts
         public DbSet<ChannelMember> ChannelMembers { get; set; }
         public DbSet<StarredMessage> StarredMessages { get; set; }
         public DbSet<ServerInvite> ServerInvites { get; set; }
+        public DbSet<ServerInviteLink> ServerInviteLinks { get; set; }
         public DbSet<UserBlock> UserBlocks { get; set; }
         public DbSet<UserReport> UserReports { get; set; }
 
@@ -130,6 +131,24 @@ namespace Persistence.Contexts
                     .WithMany()
                     .HasForeignKey(i => i.InviteeId)
                     .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<ServerInviteLink>(entity =>
+            {
+                entity.HasIndex(l => l.Code).IsUnique();
+                entity.HasIndex(l => l.ServerId);
+
+                entity.Property(l => l.Code).HasMaxLength(32);
+
+                entity.HasOne<Server>()
+                    .WithMany()
+                    .HasForeignKey(l => l.ServerId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne<User>()
+                    .WithMany()
+                    .HasForeignKey(l => l.CreatedByUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
 
             modelBuilder.Entity<StarredMessage>(entity =>

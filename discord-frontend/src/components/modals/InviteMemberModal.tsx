@@ -41,6 +41,9 @@ export default function InviteMemberModal({
   const [searching, setSearching] = useState(false);
   const [actionUserId, setActionUserId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [inviteLink, setInviteLink] = useState("");
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadMembersAndInvites = useCallback(async () => {
@@ -110,6 +113,8 @@ export default function InviteMemberModal({
     setError("");
     setSearching(false);
     setActionUserId(null);
+    setInviteLink("");
+    setLinkCopied(false);
     void loadMembersAndInvites();
   }, [isOpen, loadMembersAndInvites]);
 
@@ -118,6 +123,54 @@ export default function InviteMemberModal({
       if (searchTimer.current) clearTimeout(searchTimer.current);
     };
   }, []);
+
+  const ensureInviteLink = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return null;
+
+    setLinkBusy(true);
+    setError("");
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/servers/${serverId}/invite-link`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(
+          String(data.message ?? data.Message ?? "Davet linki oluşturulamadı.")
+        );
+      }
+      const data = await response.json();
+      const inviteCode = String(data.code ?? data.Code ?? "");
+      if (!inviteCode) throw new Error("Davet kodu alınamadı.");
+      const url = `${window.location.origin}/invite/${inviteCode}`;
+      setInviteLink(url);
+      return url;
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Davet linki oluşturulamadı."
+      );
+      return null;
+    } finally {
+      setLinkBusy(false);
+    }
+  };
+
+  const handleCopyInviteLink = async () => {
+    const url = inviteLink || (await ensureInviteLink());
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      window.setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      setError("Link kopyalanamadı. Manuel olarak seçip kopyala.");
+    }
+  };
 
   const toggleInvite = async (user: UserSearchHit) => {
     const token = localStorage.getItem("token");
@@ -208,10 +261,41 @@ export default function InviteMemberModal({
         <h2 className="font-libre text-xl text-stone-900">Üye Davet Et</h2>
         <p className="mt-1 font-hanken text-sm text-stone-500">
           <span className="font-semibold text-stone-700">{serverName}</span>{" "}
-          sunucusuna davet gönder. Kişi kabul edince sunucu listesinde görünür.
+          sunucusuna linkle veya kullanıcı arayarak davet et.
         </p>
 
         <div className="mt-5 space-y-4">
+          <div className="rounded-xl border border-stone-200 bg-stone-50 p-3">
+            <p className="font-hanken text-xs font-bold uppercase tracking-wider text-stone-400">
+              Davet linki
+            </p>
+            <p className="mt-1 font-hanken text-xs text-stone-500">
+              Linki kopyala ve paylaş. Açan kişi giriş yapınca sunucuya katılır.
+            </p>
+            {inviteLink && (
+              <p className="mt-2 break-all rounded-lg bg-white px-2.5 py-2 font-hanken text-xs text-stone-700 ring-1 ring-stone-200">
+                {inviteLink}
+              </p>
+            )}
+            <button
+              type="button"
+              disabled={linkBusy}
+              onClick={() => void handleCopyInviteLink()}
+              className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-primary-container px-3 py-2 font-hanken text-xs font-semibold text-white transition hover:bg-[#8f1b1c] disabled:opacity-60"
+            >
+              <span className="material-symbols-outlined text-base">
+                {linkCopied ? "check" : "link"}
+              </span>
+              {linkBusy
+                ? "Hazırlanıyor..."
+                : linkCopied
+                  ? "Kopyalandı"
+                  : inviteLink
+                    ? "Linki kopyala"
+                    : "Link oluştur ve kopyala"}
+            </button>
+          </div>
+
           <label className="block space-y-1">
             <span className="font-hanken text-xs font-bold uppercase tracking-wider text-stone-400">
               Kullanıcı ara
