@@ -4,6 +4,7 @@ using Application.Features.Servers.Commands.AddMember;
 using Application.Features.Servers.Commands.CreateInviteLink;
 using Application.Features.Servers.Commands.CreateServer;
 using Application.Features.Servers.Commands.LeaveServer;
+using Application.Features.Servers.Commands.UpdateServer;
 using Application.Features.Servers.Commands.RejectInvite;
 using Application.Features.Servers.Commands.RemoveMember;
 using Application.Features.Servers.Queries.GetMyInvites;
@@ -91,12 +92,40 @@ namespace WebAPI.Controllers
         [HttpPost]
         public async Task<IActionResult> CreateServer([FromBody] CreateServerDto dto)
         {
-            var server = await _mediator.Send(new CreateServerCommand
+            try
             {
-                Name = dto.Name
-            });
+                var server = await _mediator.Send(new CreateServerCommand
+                {
+                    Name = dto.Name,
+                    IconUrl = dto.IconUrl,
+                    Template = dto.Template
+                });
 
-            return Ok(server);
+                return Ok(server);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPatch("{serverId:guid}")]
+        public async Task<IActionResult> UpdateServer(Guid serverId, [FromBody] UpdateServerDto dto)
+        {
+            try
+            {
+                var server = await _mediator.Send(new UpdateServerCommand
+                {
+                    ServerId = serverId,
+                    Name = dto.Name,
+                    IconUrl = dto.IconUrl
+                });
+                return Ok(server);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpGet("{serverId:guid}/members")]

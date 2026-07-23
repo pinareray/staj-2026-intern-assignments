@@ -85,7 +85,10 @@ namespace Persistence.Repositories
             await _context.SaveChangesAsync();
         }
 
-        public async Task CreateWithOwnerAsync(Server server, Guid ownerId)
+        public async Task CreateWithOwnerAsync(
+            Server server,
+            Guid ownerId,
+            IReadOnlyList<(string Name, string Type)>? channels = null)
         {
             await _context.Servers.AddAsync(server);
             await _context.ServerMembers.AddAsync(new ServerMember
@@ -95,13 +98,31 @@ namespace Persistence.Repositories
                 UserId = ownerId,
                 Role = "Owner"
             });
-            await _context.Channels.AddAsync(new Channel
+
+            var seed = channels is { Count: > 0 }
+                ? channels
+                : new List<(string Name, string Type)> { ("genel", "Text") };
+
+            foreach (var (name, type) in seed)
             {
-                Id = Guid.NewGuid(),
-                Name = "genel",
-                ServerId = server.Id,
-                Type = "Text"
-            });
+                var normalized = name.Trim().ToLowerInvariant().Replace(' ', '-');
+                if (string.IsNullOrWhiteSpace(normalized)) continue;
+
+                await _context.Channels.AddAsync(new Channel
+                {
+                    Id = Guid.NewGuid(),
+                    Name = normalized,
+                    ServerId = server.Id,
+                    Type = string.IsNullOrWhiteSpace(type) ? "Text" : type.Trim()
+                });
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task UpdateAsync(Server server)
+        {
+            _context.Servers.Update(server);
             await _context.SaveChangesAsync();
         }
     }

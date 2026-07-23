@@ -14,6 +14,11 @@ namespace Application.Repositories
         Task<List<ServerMember>> GetMembersAsync(Guid serverId);
         Task AddMemberAsync(Guid serverId, Guid userId, string role = "Member");
         Task RemoveMemberAsync(Guid serverId, Guid userId);
-        Task CreateWithOwnerAsync(Server server, Guid ownerId);
+        Task CreateWithOwnerAsync(
+            Server server,
+            Guid ownerId,
+            IReadOnlyList<(string Name, string Type)>? channels = null);
+
+        Task UpdateAsync(Server server);
     }
 }

@@ -256,6 +256,7 @@ export default function AppShell() {
 
       <ChatArea
         selectedChannel={selectedChannel}
+        selectedServer={isDmMode ? null : selectedServer}
         hasServer={!isDmMode && !!selectedServer}
         channelsReady={isDmMode ? true : channelsReady}
         channelsEmpty={isDmMode ? false : channelsEmpty}
@@ -266,6 +267,20 @@ export default function AppShell() {
         onOpenNotifications={() => {
           setFriendsInitialTab("invites");
           setFriendsOpen(true);
+        }}
+        onServerUpdated={(patch) => {
+          setSelectedServer((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  ...(patch.name !== undefined ? { name: patch.name } : {}),
+                  ...(patch.iconUrl !== undefined
+                    ? { iconUrl: patch.iconUrl }
+                    : {}),
+                }
+              : prev
+          );
+          setServersRefreshKey((k) => k + 1);
         }}
       />
 

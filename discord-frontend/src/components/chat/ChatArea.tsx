@@ -11,6 +11,9 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import ChannelExtrasPanel from "@/components/chat/ChannelExtrasPanel";
+import ServerSetupChecklist, {
+  isServerSetupPending,
+} from "@/components/chat/ServerSetupChecklist";
 import DmSettingsModal from "@/components/modals/DmSettingsModal";
 import VoiceLobby from "@/components/chat/VoiceLobby";
 import {
@@ -22,10 +25,11 @@ import {
   uploadMessageFile,
 } from "@/services";
 import { chatHub } from "@/services";
-import type { ChannelItem, ChatMessage } from "@/models";
+import type { ChannelItem, ChatMessage, ServerItem } from "@/models";
 
 type ChatAreaProps = {
   selectedChannel: ChannelItem | null;
+  selectedServer?: ServerItem | null;
   hasServer?: boolean;
   channelsReady?: boolean;
   channelsEmpty?: boolean;
@@ -34,6 +38,10 @@ type ChatAreaProps = {
   onExpandSidePanel?: () => void;
   onIncomingMessage?: () => void;
   onOpenNotifications?: () => void;
+  onServerUpdated?: (patch: {
+    name?: string;
+    iconUrl?: string | null;
+  }) => void;
 };
 
 function mapMessage(
@@ -90,6 +98,7 @@ function getReadReceiptMessageId(
 
 export default function ChatArea({
   selectedChannel,
+  selectedServer = null,
   hasServer = false,
   channelsReady = false,
   channelsEmpty = false,
@@ -98,9 +107,11 @@ export default function ChatArea({
   onExpandSidePanel,
   onIncomingMessage,
   onOpenNotifications,
+  onServerUpdated,
 }: ChatAreaProps) {
   const router = useRouter();
   const selectedChannelId = selectedChannel?.id ?? null;
+  const composerRef = useRef<HTMLTextAreaElement>(null);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1121,7 +1132,32 @@ export default function ChatArea({
           </p>
         )}
 
-        {selectedChannel && !loading && messages.length === 0 && (
+        {selectedChannel &&
+          !loading &&
+          !isDmMode &&
+          selectedServer &&
+          selectedChannel.type !== "Voice" &&
+          selectedChannel.type !== "DM" && (
+            <ServerSetupChecklist
+              serverId={selectedServer.id}
+              serverName={selectedServer.name}
+              hasIcon={Boolean(selectedServer.iconUrl)}
+              hasFirstMessage={messages.length > 0}
+              onServerUpdated={onServerUpdated}
+              onFocusComposer={() => composerRef.current?.focus()}
+            />
+          )}
+
+        {selectedChannel &&
+          !loading &&
+          messages.length === 0 &&
+          !(
+            !isDmMode &&
+            selectedServer &&
+            selectedChannel.type !== "Voice" &&
+            selectedChannel.type !== "DM" &&
+            isServerSetupPending(selectedServer.id)
+          ) && (
           <p className="text-center text-sm text-stone-400 font-hanken pt-10 w-full">
             Bu kanalda henüz mesaj yok. İlk mesajı sen yaz!
           </p>
@@ -1352,6 +1388,7 @@ export default function ChatArea({
             </button>
             <div className="flex-1">
               <textarea
+                ref={composerRef}
                 value={draft}
                 onChange={(e) => handleDraftChange(e.target.value)}
                 onKeyDown={handleKeyDown}

@@ -99,8 +99,9 @@ export default function ServerSidebar({
     loadServers();
   }, [loadServers, refreshKey, externalRefreshKey]);
 
-  const handleServerCreated = () => {
+  const handleServerCreated = (server: ServerItem) => {
     setRefreshKey((prev) => prev + 1);
+    onServerSelect(server);
   };
 
   const serverIcon = (server: ServerItem, isActive: boolean) => {
