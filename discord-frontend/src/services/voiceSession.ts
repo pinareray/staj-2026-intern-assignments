@@ -2,10 +2,17 @@ import { chatHub } from "@/services/chatHub";
 
 export type VoicePeerState = "connecting" | "connected" | "failed";
 
+export type VoiceSessionStreams = {
+  local: MediaStream | null;
+  remotes: Record<string, MediaStream>;
+};
+
 export type VoiceSessionState = {
   muted: boolean;
   deafened: boolean;
+  cameraOn: boolean;
   peerStates: Record<string, VoicePeerState>;
+  peerHasVideo: Record<string, boolean>;
   error: string | null;
 };
 
@@ -18,6 +25,7 @@ type VoiceSignalPayload = {
 type PeerSlot = {
   pc: RTCPeerConnection;
   remoteAudio: HTMLAudioElement;
+  remoteStream: MediaStream;
   makingOffer: boolean;
   ignoreOffer: boolean;
   polite: boolean;
@@ -27,6 +35,7 @@ type VoiceSessionOptions = {
   channelId: string;
   localUserId: string;
   onStateChange?: (state: VoiceSessionState) => void;
+  onStreamsChange?: (streams: VoiceSessionStreams) => void;
 };
 
 const ICE_SERVERS: RTCIceServer[] = [
@@ -39,18 +48,20 @@ function asRecord(raw: unknown): Record<string, unknown> {
 }
 
 /**
- * Mesh WebRTC ses oturumu.
- * Yeni katılan mevcut peer'lara offer yollar; glare için polite/impolite kuralı kullanılır.
+ * Mesh WebRTC ses + MVP görüntü oturumu.
+ * Kamera açılınca mevcut peer bağlantılarına video track eklenir ve renegotiate edilir.
  */
 export class VoiceSession {
   private readonly channelId: string;
   private readonly localUserId: string;
   private readonly onStateChange?: (state: VoiceSessionState) => void;
+  private readonly onStreamsChange?: (streams: VoiceSessionStreams) => void;
 
   private localStream: MediaStream | null = null;
   private peers = new Map<string, PeerSlot>();
   private muted = false;
   private deafened = false;
+  private cameraOn = false;
   private error: string | null = null;
   private stopped = false;
 
@@ -63,36 +74,59 @@ export class VoiceSession {
     this.channelId = options.channelId;
     this.localUserId = options.localUserId;
     this.onStateChange = options.onStateChange;
+    this.onStreamsChange = options.onStreamsChange;
   }
 
   getState(): VoiceSessionState {
     const peerStates: Record<string, VoicePeerState> = {};
+    const peerHasVideo: Record<string, boolean> = {};
+
     this.peers.forEach((slot, peerId) => {
       const ice = slot.pc.iceConnectionState;
       if (ice === "connected" || ice === "completed") {
         peerStates[peerId] = "connected";
-      } else if (ice === "failed" || ice === "disconnected" || ice === "closed") {
-        peerStates[peerId] = ice === "failed" ? "failed" : "connecting";
+      } else if (ice === "failed") {
+        peerStates[peerId] = "failed";
       } else {
         peerStates[peerId] = "connecting";
       }
+
+      peerHasVideo[peerId] = slot.remoteStream
+        .getVideoTracks()
+        .some((t) => t.readyState === "live" && t.enabled);
     });
 
     return {
       muted: this.muted,
       deafened: this.deafened,
+      cameraOn: this.cameraOn,
       peerStates,
+      peerHasVideo,
       error: this.error,
     };
+  }
+
+  getStreams(): VoiceSessionStreams {
+    const remotes: Record<string, MediaStream> = {};
+    this.peers.forEach((slot, peerId) => {
+      remotes[peerId] = slot.remoteStream;
+    });
+    return { local: this.localStream, remotes };
   }
 
   private emit() {
     this.onStateChange?.(this.getState());
   }
 
+  private emitStreams() {
+    this.onStreamsChange?.(this.getStreams());
+    this.emit();
+  }
+
   async start(): Promise<void> {
     this.stopped = false;
     this.error = null;
+    this.cameraOn = false;
 
     try {
       this.localStream = await navigator.mediaDevices.getUserMedia({
@@ -111,6 +145,7 @@ export class VoiceSession {
     }
 
     this.applyMuteToLocalTracks();
+    this.emitStreams();
 
     this.unsubSignal = chatHub.subscribe("VoiceSignal", (raw) => {
       void this.onVoiceSignal(raw);
@@ -147,6 +182,7 @@ export class VoiceSession {
 
     this.localStream?.getTracks().forEach((t) => t.stop());
     this.localStream = null;
+    this.cameraOn = false;
 
     try {
       await chatHub.invoke("LeaveVoice", this.channelId);
@@ -154,7 +190,7 @@ export class VoiceSession {
       // ignore
     }
 
-    this.emit();
+    this.emitStreams();
   }
 
   setMuted(muted: boolean) {
@@ -169,6 +205,69 @@ export class VoiceSession {
       slot.remoteAudio.muted = deafened;
     });
     this.emit();
+  }
+
+  async setCameraOn(on: boolean): Promise<void> {
+    if (this.stopped || !this.localStream) return;
+    if (on === this.cameraOn) return;
+
+    if (on) {
+      try {
+        const cam = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            facingMode: "user",
+          },
+          audio: false,
+        });
+        const track = cam.getVideoTracks()[0];
+        if (!track) {
+          cam.getTracks().forEach((t) => t.stop());
+          throw new Error("Kamera bulunamadı.");
+        }
+
+        this.localStream.addTrack(track);
+        this.cameraOn = true;
+
+        const peerIds = [...this.peers.keys()];
+        for (const peerId of peerIds) {
+          const slot = this.peers.get(peerId);
+          if (!slot) continue;
+          slot.pc.addTrack(track, this.localStream);
+          await this.createAndSendOffer(peerId);
+        }
+      } catch {
+        this.error =
+          "Kamera izni alınamadı. Tarayıcı ayarlarından kameraya izin ver.";
+        this.emit();
+        throw new Error(this.error);
+      }
+    } else {
+      const videoTracks = this.localStream.getVideoTracks();
+      for (const track of videoTracks) {
+        this.peers.forEach((slot) => {
+          slot.pc.getSenders().forEach((sender) => {
+            if (sender.track === track) {
+              try {
+                slot.pc.removeTrack(sender);
+              } catch {
+                // ignore
+              }
+            }
+          });
+        });
+        track.stop();
+        this.localStream.removeTrack(track);
+      }
+      this.cameraOn = false;
+
+      for (const peerId of [...this.peers.keys()]) {
+        await this.createAndSendOffer(peerId);
+      }
+    }
+
+    this.emitStreams();
   }
 
   private applyMuteToLocalTracks() {
@@ -195,13 +294,15 @@ export class VoiceSession {
     remoteAudio.autoplay = true;
     remoteAudio.setAttribute("playsinline", "true");
     remoteAudio.muted = this.deafened;
-    // Keep element in DOM for autoplay policies on some browsers
     remoteAudio.style.display = "none";
     document.body.appendChild(remoteAudio);
+
+    const remoteStream = new MediaStream();
 
     const slot: PeerSlot = {
       pc,
       remoteAudio,
+      remoteStream,
       makingOffer: false,
       ignoreOffer: false,
       polite,
@@ -220,19 +321,36 @@ export class VoiceSession {
     };
 
     pc.ontrack = (event) => {
-      const [stream] = event.streams;
-      if (stream) {
-        remoteAudio.srcObject = stream;
+      const track = event.track;
+      if (!slot.remoteStream.getTracks().some((t) => t.id === track.id)) {
+        slot.remoteStream.addTrack(track);
+      }
+
+      track.onended = () => {
+        try {
+          slot.remoteStream.removeTrack(track);
+        } catch {
+          // ignore
+        }
+        this.emitStreams();
+      };
+      track.onmute = () => this.emit();
+      track.onunmute = () => this.emit();
+
+      if (track.kind === "audio") {
+        remoteAudio.srcObject = slot.remoteStream;
         void remoteAudio.play().catch(() => {
           // Autoplay may need a prior user gesture; join button counts.
         });
       }
+
+      this.emitStreams();
     };
 
     pc.onconnectionstatechange = () => this.emit();
     pc.oniceconnectionstatechange = () => this.emit();
 
-    this.emit();
+    this.emitStreams();
     return slot;
   }
 
@@ -246,8 +364,15 @@ export class VoiceSession {
     slot.remoteAudio.pause();
     slot.remoteAudio.srcObject = null;
     slot.remoteAudio.remove();
+    slot.remoteStream.getTracks().forEach((t) => {
+      try {
+        slot.remoteStream.removeTrack(t);
+      } catch {
+        // ignore
+      }
+    });
     this.peers.delete(peerId);
-    this.emit();
+    this.emitStreams();
   }
 
   private async sendSignal(targetUserId: string, payload: VoiceSignalPayload) {
@@ -259,7 +384,7 @@ export class VoiceSession {
     );
   }
 
-  /** Yeni katılan: mevcut peer'lara offer atar. */
+  /** Yeni katılan / kamera açılınca: peer'a offer atar. */
   private async createAndSendOffer(peerId: string) {
     const slot = await this.ensurePeer(peerId);
     if (!slot || this.stopped) return;
@@ -300,8 +425,6 @@ export class VoiceSession {
       if (!peerId || peerId === this.localUserId) continue;
       remoteIds.add(peerId);
 
-      // Lexicographically greater id initiates → avoids glare with new-joiner-only offers
-      // when both already present after reconnect. New joiner still offers everyone below.
       if (this.localUserId > peerId && !this.peers.has(peerId)) {
         await this.createAndSendOffer(peerId);
       } else {
@@ -325,7 +448,6 @@ export class VoiceSession {
     const peerId = String(payload.userId ?? payload.UserId ?? "");
     if (!peerId || peerId === this.localUserId) return;
 
-    // Existing peers wait for offer from the new joiner (greater id) or prepare PC.
     if (this.localUserId > peerId) {
       await this.createAndSendOffer(peerId);
     } else {
