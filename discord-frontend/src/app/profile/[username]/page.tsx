@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { API_BASE_URL, authFetch, logoutToLanding } from "@/services";
 
 type PublicServer = {
@@ -30,6 +30,14 @@ type PublicProfile = {
   servers: PublicServer[];
   friends: PublicFriend[];
 };
+
+const REPORT_REASONS = [
+  "Spam / reklam",
+  "Hakaret / taciz",
+  "Uygunsuz içerik",
+  "Sahte hesap",
+  "Diğer",
+];
 
 function bannerGradient(username: string) {
   const seed = username.charCodeAt(0) + (username.charCodeAt(1) ?? 0);
@@ -82,6 +90,29 @@ export default function ProfilePage() {
   const [editStatus, setEditStatus] = useState("");
   const [saveError, setSaveError] = useState("");
   const [saveSuccess, setSaveSuccess] = useState("");
+  const [blocked, setBlocked] = useState(false);
+  const [modBusy, setModBusy] = useState(false);
+  const [modError, setModError] = useState("");
+  const [modSuccess, setModSuccess] = useState("");
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState(REPORT_REASONS[0]);
+  const [reportDetails, setReportDetails] = useState("");
+
+  const loadBlockStatus = useCallback(async (userId: string) => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/moderation/blocks/${userId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!response.ok) return;
+      const data = (await response.json()) as Record<string, unknown>;
+      setBlocked(Boolean(data.iBlockedThem ?? data.IBlockedThem));
+    } catch {
+      // ignore
+    }
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -95,6 +126,10 @@ export default function ProfilePage() {
 
       setLoading(true);
       setError("");
+      setModError("");
+      setModSuccess("");
+      setReportOpen(false);
+      setReportDetails("");
 
       try {
         const response = await fetch(
@@ -102,7 +137,7 @@ export default function ProfilePage() {
           { headers: { Authorization: `Bearer ${token}` } }
         );
 
-        if (response.status === 401 || response.status === 403) {
+        if (response.status === 401) {
           localStorage.removeItem("token");
           router.push("/login");
           return;
@@ -149,6 +184,11 @@ export default function ProfilePage() {
         setEditUsername(mapped.username);
         setEditBio(mapped.bio ?? "");
         setEditStatus(mapped.status ?? "");
+        if (!mapped.isOwnProfile) {
+          void loadBlockStatus(mapped.id);
+        } else {
+          setBlocked(false);
+        }
       } catch {
         setError("Sunucuya bağlanılamadı.");
       } finally {
@@ -157,7 +197,84 @@ export default function ProfilePage() {
     };
 
     void load();
-  }, [usernameParam, router]);
+  }, [usernameParam, router, loadBlockStatus]);
+
+  const toggleBlock = async () => {
+    if (!profile || profile.isOwnProfile) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    setModBusy(true);
+    setModError("");
+    setModSuccess("");
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/moderation/blocks/${profile.id}`,
+        {
+          method: blocked ? "DELETE" : "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      const data = (await response.json().catch(() => ({}))) as Record<
+        string,
+        unknown
+      >;
+      if (!response.ok) {
+        setModError(String(data.message ?? "İşlem başarısız."));
+        return;
+      }
+      setBlocked(!blocked);
+      setModSuccess(
+        blocked
+          ? `@${profile.username} engeli kaldırıldı.`
+          : `@${profile.username} engellendi. Mesaj ve arkadaşlık isteği çalışmaz.`
+      );
+    } catch {
+      setModError("Sunucuya bağlanılamadı.");
+    } finally {
+      setModBusy(false);
+    }
+  };
+
+  const submitReport = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!profile || profile.isOwnProfile) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    setModBusy(true);
+    setModError("");
+    setModSuccess("");
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/moderation/reports`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          userId: profile.id,
+          reason: reportReason,
+          details: reportDetails.trim() || null,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as Record<
+        string,
+        unknown
+      >;
+      if (!response.ok) {
+        setModError(String(data.message ?? "Şikayet gönderilemedi."));
+        return;
+      }
+      setModSuccess("Şikayetin alındı. Adminler inceleyecek.");
+      setReportOpen(false);
+      setReportDetails("");
+    } catch {
+      setModError("Sunucuya bağlanılamadı.");
+    } finally {
+      setModBusy(false);
+    }
+  };
 
   const joinedLabel = useMemo(() => {
     if (!profile?.createdAt) return "—";
@@ -335,7 +452,7 @@ export default function ProfilePage() {
               <div className="-mt-14 flex flex-col gap-4 sm:-mt-16 sm:flex-row sm:items-end sm:justify-between">
                 <Avatar username={profile.username} size="xl" />
                 <div className="flex flex-wrap gap-2 pb-1 sm:justify-end">
-                  {profile.isOwnProfile && (
+                  {profile.isOwnProfile ? (
                     <>
                       <div className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1 font-hanken text-xs text-stone-600">
                         {profile.friendCount} arkadaş
@@ -343,6 +460,39 @@ export default function ProfilePage() {
                       <div className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1 font-hanken text-xs text-stone-600">
                         {profile.serverCount} sunucu
                       </div>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        disabled={modBusy}
+                        onClick={() => void toggleBlock()}
+                        className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 font-hanken text-xs font-semibold transition disabled:opacity-60 ${
+                          blocked
+                            ? "border-stone-200 bg-stone-50 text-stone-700 hover:bg-stone-100"
+                            : "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-base">
+                          {blocked ? "lock_open" : "block"}
+                        </span>
+                        {blocked ? "Engeli kaldır" : "Engelle"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={modBusy}
+                        onClick={() => {
+                          setReportOpen((v) => !v);
+                          setModError("");
+                          setModSuccess("");
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 font-hanken text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:opacity-60"
+                      >
+                        <span className="material-symbols-outlined text-base">
+                          flag
+                        </span>
+                        Şikayet et
+                      </button>
                     </>
                   )}
                 </div>
@@ -364,6 +514,82 @@ export default function ProfilePage() {
                   <p className="mt-3 font-hanken text-sm text-stone-400">
                     Özel durum ayarlanmadı
                   </p>
+                )}
+
+                {!profile.isOwnProfile && (modError || modSuccess || blocked) && (
+                  <div className="mt-3 space-y-2">
+                    {blocked && (
+                      <p className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 font-hanken text-xs text-stone-600">
+                        Bu kullanıcıyı engelledin. Mesaj ve arkadaşlık isteği
+                        çalışmaz.
+                      </p>
+                    )}
+                    {modError && (
+                      <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 font-hanken text-xs text-red-700">
+                        {modError}
+                      </p>
+                    )}
+                    {modSuccess && (
+                      <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 font-hanken text-xs text-emerald-700">
+                        {modSuccess}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {!profile.isOwnProfile && reportOpen && (
+                  <form
+                    onSubmit={(e) => void submitReport(e)}
+                    className="mt-4 space-y-3 rounded-2xl border border-amber-200 bg-amber-50/50 p-4"
+                  >
+                    <p className="font-hanken text-sm font-semibold text-stone-900">
+                      @{profile.username} kullanıcısını şikayet et
+                    </p>
+                    <label className="block space-y-1">
+                      <span className="font-hanken text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                        Neden
+                      </span>
+                      <select
+                        value={reportReason}
+                        onChange={(e) => setReportReason(e.target.value)}
+                        className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2 font-hanken text-sm outline-none focus:border-primary-container/40"
+                      >
+                        {REPORT_REASONS.map((r) => (
+                          <option key={r} value={r}>
+                            {r}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block space-y-1">
+                      <span className="font-hanken text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                        Detay (isteğe bağlı)
+                      </span>
+                      <textarea
+                        value={reportDetails}
+                        onChange={(e) => setReportDetails(e.target.value)}
+                        rows={3}
+                        placeholder="Kısaca anlat..."
+                        className="w-full resize-none rounded-xl border border-stone-200 bg-white px-3 py-2 font-hanken text-sm outline-none focus:border-primary-container/40"
+                      />
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setReportOpen(false)}
+                        className="flex-1 rounded-xl border border-stone-200 bg-white px-3 py-2 font-hanken text-sm text-stone-600 hover:bg-stone-50"
+                      >
+                        Vazgeç
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={modBusy}
+                        className="flex-1 rounded-xl bg-primary-container px-3 py-2 font-hanken text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+                      >
+                        {modBusy ? "Gönderiliyor..." : "Gönder"}
+                      </button>
+                    </div>
+                  </form>
                 )}
               </div>
             </div>

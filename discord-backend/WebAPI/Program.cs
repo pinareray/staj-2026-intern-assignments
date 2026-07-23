@@ -72,7 +72,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidIssuer = tokenOptions["Issuer"],
             ValidAudience = tokenOptions["Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(securityKey)),
-            ClockSkew = TimeSpan.Zero
+            ClockSkew = TimeSpan.FromMinutes(5)
         };
 
         // SignalR WebSocket: access_token query string üzerinden JWT alır.
@@ -228,6 +228,25 @@ using (var scope = app.Services.CreateScope())
         );
         CREATE INDEX IF NOT EXISTS "IX_UserReports_Status" ON "UserReports" ("Status");
         CREATE INDEX IF NOT EXISTS "IX_UserReports_ReportedUserId" ON "UserReports" ("ReportedUserId");
+
+        CREATE TABLE IF NOT EXISTS "Notifications" (
+            "Id" uuid NOT NULL,
+            "UserId" uuid NOT NULL,
+            "Type" text NOT NULL,
+            "ActorUserId" uuid NOT NULL,
+            "ServerId" uuid,
+            "ChannelId" uuid NOT NULL,
+            "MessageId" uuid NOT NULL,
+            "ChannelName" text NOT NULL DEFAULT '',
+            "Preview" text,
+            "IsRead" boolean NOT NULL DEFAULT false,
+            "CreatedAt" timestamp with time zone NOT NULL,
+            CONSTRAINT "PK_Notifications" PRIMARY KEY ("Id"),
+            CONSTRAINT "FK_Notifications_Users_UserId" FOREIGN KEY ("UserId") REFERENCES "Users" ("Id") ON DELETE CASCADE,
+            CONSTRAINT "FK_Notifications_Users_ActorUserId" FOREIGN KEY ("ActorUserId") REFERENCES "Users" ("Id") ON DELETE RESTRICT
+        );
+        CREATE INDEX IF NOT EXISTS "IX_Notifications_UserId" ON "Notifications" ("UserId");
+        CREATE INDEX IF NOT EXISTS "IX_Notifications_UserId_IsRead" ON "Notifications" ("UserId", "IsRead");
         """);
 
     // Platform admin e-postaları (virgülle ayrılmış) — appsettings: PlatformAdminEmails

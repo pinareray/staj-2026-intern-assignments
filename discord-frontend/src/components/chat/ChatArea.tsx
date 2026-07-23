@@ -11,6 +11,9 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import ChannelExtrasPanel from "@/components/chat/ChannelExtrasPanel";
+import NotificationsPanel, {
+  type MentionNotificationItem,
+} from "@/components/chat/NotificationsPanel";
 import ServerSetupChecklist, {
   isServerSetupPending,
 } from "@/components/chat/ServerSetupChecklist";
@@ -26,6 +29,15 @@ import {
 } from "@/services";
 import { chatHub } from "@/services";
 import type { ChannelItem, ChatMessage, ServerItem } from "@/models";
+import { readUserFromToken } from "@/lib/jwtUser";
+import {
+  filterMentionCandidates,
+  getActiveMention,
+  insertMention,
+  isMentionToken,
+  splitMentionTokens,
+  type MentionCandidate,
+} from "@/lib/mentions";
 
 type ChatAreaProps = {
   selectedChannel: ChannelItem | null;
@@ -34,10 +46,14 @@ type ChatAreaProps = {
   channelsReady?: boolean;
   channelsEmpty?: boolean;
   isDmMode?: boolean;
+  isFriendsMode?: boolean;
   sidePanelCollapsed?: boolean;
   onExpandSidePanel?: () => void;
   onIncomingMessage?: () => void;
-  onOpenNotifications?: () => void;
+  onOpenInvites?: () => void;
+  onOpenMention?: (item: MentionNotificationItem) => void;
+  focusMessageId?: string | null;
+  onFocusMessageConsumed?: () => void;
   onServerUpdated?: (patch: {
     name?: string;
     iconUrl?: string | null;
@@ -103,10 +119,14 @@ export default function ChatArea({
   channelsReady = false,
   channelsEmpty = false,
   isDmMode = false,
+  isFriendsMode = false,
   sidePanelCollapsed = false,
   onExpandSidePanel,
   onIncomingMessage,
-  onOpenNotifications,
+  onOpenInvites,
+  onOpenMention,
+  focusMessageId = null,
+  onFocusMessageConsumed,
   onServerUpdated,
 }: ChatAreaProps) {
   const router = useRouter();
@@ -123,6 +143,13 @@ export default function ChatArea({
     return localStorage.getItem("username") || "Sen";
   });
   const [inviteBadge, setInviteBadge] = useState(0);
+  const [mentionUnread, setMentionUnread] = useState(0);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationsRefreshKey, setNotificationsRefreshKey] = useState(0);
+  const [highlightMessageId, setHighlightMessageId] = useState<string | null>(
+    null
+  );
+  const [messageMenuId, setMessageMenuId] = useState<string | null>(null);
   const [extrasOpen, setExtrasOpen] = useState(false);
   const [extrasTab, setExtrasTab] = useState<"members" | "pins">("members");
   const [dmSettingsOpen, setDmSettingsOpen] = useState(false);
@@ -143,6 +170,14 @@ export default function ChatArea({
     null
   );
   const [uploading, setUploading] = useState(false);
+  const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>(
+    []
+  );
+  const [mentionOpen, setMentionOpen] = useState(false);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [mentionQuery, setMentionQuery] = useState("");
+  const [mentionStart, setMentionStart] = useState(0);
+  const [mentionEnd, setMentionEnd] = useState(0);
 
   const selectedChannelIdRef = useRef<string | null>(null);
   const selectedChannelTypeRef = useRef<string | null>(null);
@@ -173,25 +208,35 @@ export default function ChatArea({
   useEffect(() => {
     let cancelled = false;
 
-    const loadInviteBadge = async () => {
+    const loadBadges = async () => {
       const token = localStorage.getItem("token");
       if (!token) return;
       try {
-        const response = await fetch(`${API_BASE_URL}/api/servers/invites`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!response.ok || cancelled) return;
-        const data = await response.json();
-        if (!cancelled) {
+        const [invitesRes, notifRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/servers/invites`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`${API_BASE_URL}/api/notifications`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+
+        if (!cancelled && invitesRes.ok) {
+          const data = await invitesRes.json();
           setInviteBadge(Array.isArray(data) ? data.length : 0);
+        }
+
+        if (!cancelled && notifRes.ok) {
+          const data = (await notifRes.json()) as Record<string, unknown>;
+          setMentionUnread(Number(data.unreadCount ?? data.UnreadCount ?? 0));
         }
       } catch {
         // ignore
       }
     };
 
-    void loadInviteBadge();
-    const timer = window.setInterval(() => void loadInviteBadge(), 20000);
+    void loadBadges();
+    const timer = window.setInterval(() => void loadBadges(), 20000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
@@ -199,26 +244,116 @@ export default function ChatArea({
   }, []);
 
   useEffect(() => {
+    const unsub = chatHub.subscribe("MentionNotification", () => {
+      setMentionUnread((n) => n + 1);
+      setNotificationsRefreshKey((k) => k + 1);
+    });
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    if (!focusMessageId || loading) return;
+    const timer = window.setTimeout(() => {
+      const el = document.getElementById(`msg-${focusMessageId}`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightMessageId(focusMessageId);
+      onFocusMessageConsumed?.();
+      window.setTimeout(() => setHighlightMessageId(null), 2800);
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [focusMessageId, loading, messages, onFocusMessageConsumed]);
+
+  useEffect(() => {
+    setMessageMenuId(null);
+  }, [selectedChannelId]);
+
+  useEffect(() => {
+    if (!messageMenuId) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("[data-message-menu]")) return;
+      setMessageMenuId(null);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [messageMenuId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setMentionOpen(false);
+
+    const loadMentionCandidates = async () => {
+      const serverId = selectedChannel?.serverId ?? selectedServer?.id ?? null;
+
+      if (selectedChannel?.type === "DM") {
+        if (!dmPeerUserId) {
+          if (!cancelled) setMentionCandidates([]);
+          return;
+        }
+        if (!cancelled) {
+          setMentionCandidates([
+            {
+              userId: dmPeerUserId,
+              username: selectedChannel.name.replace(/^@/, ""),
+            },
+          ]);
+        }
+        return;
+      }
+
+      if (!serverId) {
+        if (!cancelled) setMentionCandidates([]);
+        return;
+      }
+
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/servers/${serverId}/members`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (!response.ok || cancelled) return;
+        const data = await response.json();
+        const list = Array.isArray(data) ? data : [];
+        if (!cancelled) {
+          setMentionCandidates(
+            list.map((m: Record<string, unknown>) => ({
+              userId: String(m.userId ?? m.UserId ?? ""),
+              username: String(m.username ?? m.Username ?? ""),
+            })).filter((m: MentionCandidate) => m.username)
+          );
+        }
+      } catch {
+        if (!cancelled) setMentionCandidates([]);
+      }
+    };
+
+    void loadMentionCandidates();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    selectedChannel?.id,
+    selectedChannel?.serverId,
+    selectedChannel?.type,
+    selectedChannel?.name,
+    selectedServer?.id,
+    dmPeerUserId,
+  ]);
+
+  useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) return;
 
-    try {
-      const payload = JSON.parse(atob(token.split(".")[1] ?? ""));
-      const id =
-        payload[
-          "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"
-        ] ?? payload.sub;
-      if (id) queueMicrotask(() => setCurrentUserId(String(id)));
-
-      const name =
-        payload[
-          "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"
-        ] ??
-        payload.unique_name ??
-        payload.name;
-      if (name) queueMicrotask(() => setCurrentUsername(String(name)));
-    } catch {
-      // ignore
+    const fromToken = readUserFromToken();
+    if (fromToken?.id) {
+      queueMicrotask(() => setCurrentUserId(fromToken.id));
+    }
+    if (fromToken?.username) {
+      queueMicrotask(() => setCurrentUsername(fromToken.username));
     }
 
     const loadMe = async () => {
@@ -444,7 +579,7 @@ export default function ChatArea({
         ]);
 
         if (!messagesResponse.ok) {
-          if (messagesResponse.status === 401 || messagesResponse.status === 403) {
+          if (messagesResponse.status === 401) {
             localStorage.removeItem("token");
             router.push("/login");
           }
@@ -523,21 +658,72 @@ export default function ChatArea({
     [messages, currentUserId, peerLastReadAt, selectedChannel?.type]
   );
 
-  const highlightContent = (content: string) => {
-    const q = searchQuery.trim();
-    if (!q) return content;
+  const mentionSuggestions = useMemo(
+    () => filterMentionCandidates(mentionCandidates, mentionQuery),
+    [mentionCandidates, mentionQuery]
+  );
 
-    const lower = content.toLowerCase();
-    const idx = lower.indexOf(q.toLowerCase());
-    if (idx === -1) return content;
+  useEffect(() => {
+    if (mentionIndex >= mentionSuggestions.length) {
+      setMentionIndex(0);
+    }
+  }, [mentionIndex, mentionSuggestions.length]);
+
+  const highlightContent = (content: string, mine = false) => {
+    const q = searchQuery.trim();
+    const parts = splitMentionTokens(content);
 
     return (
       <>
-        {content.slice(0, idx)}
-        <mark className="rounded bg-amber-200/80 px-0.5 text-stone-900">
-          {content.slice(idx, idx + q.length)}
-        </mark>
-        {content.slice(idx + q.length)}
+        {parts.map((part, i) => {
+          if (isMentionToken(part)) {
+            const name = part.slice(1);
+            const isKnown = mentionCandidates.some(
+              (c) => c.username.toLowerCase() === name.toLowerCase()
+            );
+            const isSelf =
+              currentUsername.toLowerCase() === name.toLowerCase();
+            const className = mine
+              ? isSelf
+                ? "rounded px-0.5 font-semibold bg-white/25 text-white"
+                : "rounded px-0.5 font-semibold text-white/95"
+              : isSelf
+                ? "rounded px-0.5 font-semibold bg-primary-container/15 text-primary-container"
+                : isKnown
+                  ? "rounded px-0.5 font-semibold text-primary-container"
+                  : "font-semibold text-primary-container/80";
+
+            return (
+              <button
+                key={`${i}-${part}`}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push(`/profile/${encodeURIComponent(name)}`);
+                }}
+                className={`${className} hover:underline`}
+              >
+                {part}
+              </button>
+            );
+          }
+
+          if (!q) return <span key={`${i}-t`}>{part}</span>;
+
+          const lower = part.toLowerCase();
+          const idx = lower.indexOf(q.toLowerCase());
+          if (idx === -1) return <span key={`${i}-t`}>{part}</span>;
+
+          return (
+            <span key={`${i}-t`}>
+              {part.slice(0, idx)}
+              <mark className="rounded bg-amber-200/80 px-0.5 text-stone-900">
+                {part.slice(idx, idx + q.length)}
+              </mark>
+              {part.slice(idx + q.length)}
+            </span>
+          );
+        })}
       </>
     );
   };
@@ -624,7 +810,7 @@ export default function ChatArea({
       <>
         {message.content ? (
           <p className="text-sm font-hanken leading-relaxed">
-            {highlightContent(message.content)}
+            {highlightContent(message.content, mine)}
             {message.editedAt ? (
               <span
                 className={`ml-1 text-[10px] ${
@@ -827,7 +1013,7 @@ export default function ChatArea({
       });
 
       if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
+        if (response.status === 401) {
           localStorage.removeItem("token");
           router.push("/login");
         }
@@ -852,6 +1038,7 @@ export default function ChatArea({
       });
       shouldAutoScrollRef.current = true;
       setDraft("");
+      setMentionOpen(false);
       clearPendingAttachment();
       setTypingUser(null);
     } catch {
@@ -866,10 +1053,41 @@ export default function ChatArea({
     void handleSend();
   };
 
-  const handleDraftChange = (value: string) => {
-    setDraft(value);
-    if (!selectedChannelId) return;
+  const applyMention = (username: string) => {
+    const mention = {
+      start: mentionStart,
+      end: mentionEnd,
+      query: mentionQuery,
+    };
+    const { text, cursor } = insertMention(draft, mention, username);
+    setDraft(text);
+    setMentionOpen(false);
+    requestAnimationFrame(() => {
+      const el = composerRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(cursor, cursor);
+    });
+  };
 
+  const syncMentionFromComposer = (value: string, cursor: number) => {
+    const active = getActiveMention(value, cursor);
+    if (!active || mentionCandidates.length === 0) {
+      setMentionOpen(false);
+      return;
+    }
+    setMentionStart(active.start);
+    setMentionEnd(active.end);
+    setMentionQuery(active.query);
+    setMentionIndex(0);
+    setMentionOpen(true);
+  };
+
+  const handleDraftChange = (value: string, cursor: number) => {
+    setDraft(value);
+    syncMentionFromComposer(value, cursor);
+
+    if (!selectedChannelId) return;
     if (!value.trim()) return;
 
     const now = Date.now();
@@ -880,6 +1098,32 @@ export default function ChatArea({
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mentionOpen && mentionSuggestions.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMentionIndex((i) => (i + 1) % mentionSuggestions.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMentionIndex(
+          (i) => (i - 1 + mentionSuggestions.length) % mentionSuggestions.length
+        );
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        const pick = mentionSuggestions[mentionIndex];
+        if (pick) applyMention(pick.username);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setMentionOpen(false);
+        return;
+      }
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void handleSend();
@@ -918,7 +1162,9 @@ export default function ChatArea({
                 ? selectedChannel.type === "DM"
                   ? `@${selectedChannel.name}`
                   : selectedChannel.name
-                : isDmMode
+                : isFriendsMode
+                  ? "Arkadaşlar"
+                  : isDmMode
                   ? "Bir sohbet seç"
                   : hasServer && !channelsReady
                     ? "Kanallar yükleniyor..."
@@ -941,6 +1187,8 @@ export default function ChatArea({
                       : selectedChannel.type === "Announcement"
                         ? "Duyuru kanalı"
                         : "Sohbet kanalı"
+                  : isFriendsMode
+                    ? "İstekler, davetler ve arkadaş listesi"
                   : isDmMode
                     ? "Soldan bir arkadaş sohbeti seç"
                     : hasServer && !channelsReady
@@ -967,43 +1215,60 @@ export default function ChatArea({
               </span>
             </button>
           )}
-          <button
-            type="button"
-            title="Bildirimler"
-            aria-label="Bildirimler"
-            onClick={() => onOpenNotifications?.()}
-            className="group relative rounded-lg p-2 text-stone-400 transition-colors hover:bg-stone-100 hover:text-primary-container"
-          >
-            <span className="material-symbols-outlined text-xl">
-              notifications
-            </span>
-            {inviteBadge > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary-container px-1 font-hanken text-[10px] font-bold text-white">
-                {inviteBadge > 9 ? "9+" : inviteBadge}
+          <div className="relative">
+            <button
+              type="button"
+              title="Bildirimler"
+              aria-label="Bildirimler"
+              onClick={() => setNotificationsOpen((v) => !v)}
+              className="group relative rounded-lg p-2 text-stone-400 transition-colors hover:bg-stone-100 hover:text-primary-container"
+            >
+              <span className="material-symbols-outlined text-xl">
+                notifications
               </span>
-            )}
-            <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-stone-900 px-2 py-1 font-hanken text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-              Bildirimler
-            </span>
-          </button>
-          <button
-            type="button"
-            title="Üyeler"
-            aria-label="Üyeler"
-            disabled={!selectedChannel?.serverId}
-            onClick={() => {
-              setExtrasTab("members");
-              setExtrasOpen(true);
-            }}
-            className="group relative rounded-lg p-2 text-stone-400 transition-colors hover:bg-stone-100 hover:text-primary-container disabled:opacity-40"
-          >
-            <span className="material-symbols-outlined text-xl">
-              manage_accounts
-            </span>
-            <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-stone-900 px-2 py-1 font-hanken text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-              Üyeler
-            </span>
-          </button>
+              {inviteBadge + mentionUnread > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary-container px-1 font-hanken text-[10px] font-bold text-white">
+                  {inviteBadge + mentionUnread > 9
+                    ? "9+"
+                    : inviteBadge + mentionUnread}
+                </span>
+              )}
+              <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-stone-900 px-2 py-1 font-hanken text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                Bildirimler
+              </span>
+            </button>
+            <NotificationsPanel
+              isOpen={notificationsOpen}
+              onClose={() => setNotificationsOpen(false)}
+              inviteCount={inviteBadge}
+              refreshKey={notificationsRefreshKey}
+              onOpenInvites={() => onOpenInvites?.()}
+              onOpenMention={(item) => {
+                setMentionUnread((n) => Math.max(0, n - (item.isRead ? 0 : 1)));
+                onOpenMention?.(item);
+              }}
+            />
+          </div>
+          {!isDmMode && selectedChannel?.type !== "DM" && (
+            <button
+              type="button"
+              title="Üyeler"
+              aria-label="Üyeler"
+              disabled={!selectedChannel?.serverId}
+              onClick={() => {
+                setExtrasTab("members");
+                setExtrasOpen(true);
+              }}
+              className="group relative rounded-lg p-2 text-stone-400 transition-colors hover:bg-stone-100 hover:text-primary-container disabled:opacity-40"
+            >
+              <span className="material-symbols-outlined text-xl">
+                manage_accounts
+              </span>
+              <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-stone-900 px-2 py-1 font-hanken text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                Üyeler
+              </span>
+            </button>
+          )}
           <button
             type="button"
             title="Sabit mesajlar"
@@ -1099,14 +1364,21 @@ export default function ChatArea({
         ref={scrollContainerRef}
         className="flex-1 overflow-y-auto custom-scrollbar px-6 py-8 inner-depth space-y-6 bg-gradient-to-br from-white to-[#f7f4ef]"
       >
-        {!selectedChannel && isDmMode && (
+        {!selectedChannel && isFriendsMode && (
+          <p className="text-center text-sm text-stone-400 font-hanken pt-10 w-full max-w-md mx-auto leading-relaxed">
+            Soldaki Arkadaşlar panelinden birine Mesaj gönder — ya da istekleri
+            ve davetleri yönet.
+          </p>
+        )}
+
+        {!selectedChannel && isDmMode && !isFriendsMode && (
           <p className="text-center text-sm text-stone-400 font-hanken pt-10 w-full max-w-md mx-auto leading-relaxed">
             Soldan bir arkadaş sohbeti seç — ya da Arkadaşlar listesinden Mesaj
             ile yeni bir konuşma başlat.
           </p>
         )}
 
-        {!selectedChannel && !isDmMode && hasServer && !channelsReady && (
+        {!selectedChannel && !isDmMode && !isFriendsMode && hasServer && !channelsReady && (
           <p className="text-center text-sm text-stone-400 font-hanken pt-10 w-full">
             Kanallar yükleniyor...
           </p>
@@ -1119,7 +1391,7 @@ export default function ChatArea({
           </p>
         )}
 
-        {!selectedChannel && !isDmMode && !hasServer && (
+        {!selectedChannel && !isDmMode && !isFriendsMode && !hasServer && (
           <p className="text-center text-sm text-stone-400 font-hanken pt-10 w-full max-w-md mx-auto leading-relaxed">
             Bir kanal seçerek sohbete başlayın — ya da yeni bir kanal oluşturarak
             arşivi şekillendirin.
@@ -1178,10 +1450,105 @@ export default function ChatArea({
               isMine &&
               selectedChannel.type === "DM" &&
               message.id === readReceiptMessageId;
+            const menuOpen = messageMenuId === message.id;
+
+            const messageActions = (
+              <div
+                data-message-menu
+                className={`absolute z-20 w-44 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-lg ${
+                  isMine ? "right-0 top-full mt-1" : "left-0 top-full mt-1"
+                }`}
+              >
+                {isMine && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMessageMenuId(null);
+                        startEdit(message);
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-2 font-hanken text-sm text-stone-700 hover:bg-stone-50"
+                    >
+                      <span className="material-symbols-outlined text-base text-stone-400">
+                        edit
+                      </span>
+                      Düzenle
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMessageMenuId(null);
+                        void handleDelete(message);
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-2 font-hanken text-sm text-red-600 hover:bg-red-50"
+                    >
+                      <span className="material-symbols-outlined text-base">
+                        delete
+                      </span>
+                      Sil
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMessageMenuId(null);
+                    void toggleStar(message);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 font-hanken text-sm text-stone-700 hover:bg-stone-50"
+                >
+                  <span
+                    className={`material-symbols-outlined text-base ${
+                      message.isStarred ? "text-amber-500" : "text-stone-400"
+                    }`}
+                    style={
+                      message.isStarred
+                        ? { fontVariationSettings: "'FILL' 1" }
+                        : undefined
+                    }
+                  >
+                    star
+                  </span>
+                  {message.isStarred ? "Yıldızı kaldır" : "Yıldızla"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMessageMenuId(null);
+                    void togglePin(message);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 font-hanken text-sm text-stone-700 hover:bg-stone-50"
+                >
+                  <span
+                    className={`material-symbols-outlined text-base ${
+                      message.isPinned
+                        ? "text-primary-container"
+                        : "text-stone-400"
+                    }`}
+                    style={
+                      message.isPinned
+                        ? { fontVariationSettings: "'FILL' 1" }
+                        : undefined
+                    }
+                  >
+                    push_pin
+                  </span>
+                  {message.isPinned ? "Sabiti kaldır" : "Sabitle"}
+                </button>
+              </div>
+            );
 
             if (isMine) {
               return (
-                <div key={message.id} className="flex gap-4 flex-row-reverse">
+                <div
+                  id={`msg-${message.id}`}
+                  key={message.id}
+                  className={`flex gap-4 flex-row-reverse scroll-mt-24 rounded-xl transition-colors ${
+                    highlightMessageId === message.id
+                      ? "bg-primary-container/10 ring-2 ring-primary-container/30"
+                      : ""
+                  }`}
+                >
                   <div className="w-10 h-10 rounded-lg bg-primary-container/10 border border-primary-container/20 flex items-center justify-center flex-shrink-0">
                     <span className="material-symbols-outlined text-primary-container">
                       person
@@ -1189,58 +1556,6 @@ export default function ChatArea({
                   </div>
                   <div className="flex-1 space-y-1 text-right">
                     <div className="flex items-baseline gap-2 justify-end">
-                      <button
-                        type="button"
-                        title="Sil"
-                        onClick={() => void handleDelete(message)}
-                        className="material-symbols-outlined text-base text-stone-300 transition-colors hover:text-red-500"
-                      >
-                        delete
-                      </button>
-                      <button
-                        type="button"
-                        title="Düzenle"
-                        onClick={() => startEdit(message)}
-                        className="material-symbols-outlined text-base text-stone-300 transition-colors hover:text-primary-container"
-                      >
-                        edit
-                      </button>
-                      <button
-                        type="button"
-                        title={message.isStarred ? "Yıldızı kaldır" : "Yıldızla"}
-                        onClick={() => void toggleStar(message)}
-                        className={`material-symbols-outlined text-base transition-colors ${
-                          message.isStarred
-                            ? "text-amber-500"
-                            : "text-stone-300 hover:text-amber-500"
-                        }`}
-                        style={
-                          message.isStarred
-                            ? { fontVariationSettings: "'FILL' 1" }
-                            : undefined
-                        }
-                      >
-                        star
-                      </button>
-                      <button
-                        type="button"
-                        title={
-                          message.isPinned ? "Sabiti kaldır" : "Mesajı sabitle"
-                        }
-                        onClick={() => void togglePin(message)}
-                        className={`material-symbols-outlined text-base transition-colors ${
-                          message.isPinned
-                            ? "text-primary-container"
-                            : "text-stone-300 hover:text-primary-container"
-                        }`}
-                        style={
-                          message.isPinned
-                            ? { fontVariationSettings: "'FILL' 1" }
-                            : undefined
-                        }
-                      >
-                        push_pin
-                      </button>
                       <span className="text-[10px] text-stone-400 font-medium">
                         {formatTime(message.createdAt)}
                       </span>
@@ -1256,8 +1571,30 @@ export default function ChatArea({
                         Sen
                       </button>
                     </div>
-                    <div className="inline-block max-w-[85%] p-4 rounded-xl rounded-tr-sm bg-primary-container text-white shadow-md text-left">
-                      {renderMessageBody(message, true)}
+                    <div className="group/msg relative inline-flex max-w-[85%] flex-row-reverse items-center gap-1">
+                      <div className="rounded-xl rounded-tr-sm bg-primary-container p-4 text-left text-white shadow-md">
+                        {renderMessageBody(message, true)}
+                      </div>
+                      <div className="relative shrink-0" data-message-menu>
+                        <button
+                          type="button"
+                          title="Mesaj seçenekleri"
+                          aria-label="Mesaj seçenekleri"
+                          onClick={() =>
+                            setMessageMenuId(menuOpen ? null : message.id)
+                          }
+                          className={`flex h-7 w-7 items-center justify-center rounded-full text-stone-400 transition-all hover:bg-stone-200/80 hover:text-stone-700 ${
+                            menuOpen
+                              ? "bg-stone-200/80 text-stone-700 opacity-100"
+                              : "opacity-40 hover:opacity-100 group-hover/msg:opacity-100 focus:opacity-100"
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-lg">
+                            expand_more
+                          </span>
+                        </button>
+                        {menuOpen && messageActions}
+                      </div>
                     </div>
                     {showReadReceipt && (
                       <p className="pr-1 font-hanken text-[11px] text-stone-400">
@@ -1270,7 +1607,15 @@ export default function ChatArea({
             }
 
             return (
-              <div key={message.id} className="flex gap-4">
+              <div
+                id={`msg-${message.id}`}
+                key={message.id}
+                className={`flex gap-4 scroll-mt-24 rounded-xl transition-colors ${
+                  highlightMessageId === message.id
+                    ? "bg-primary-container/10 ring-2 ring-primary-container/30"
+                    : ""
+                }`}
+              >
                 <div className="w-10 h-10 rounded-lg bg-stone-200 flex items-center justify-center flex-shrink-0 border border-stone-200">
                   <span className="font-libre text-sm text-stone-600 uppercase font-bold">
                     {message.username.charAt(0)}
@@ -1292,45 +1637,31 @@ export default function ChatArea({
                     <span className="text-[10px] text-stone-400 font-medium">
                       {formatTime(message.createdAt)}
                     </span>
-                    <button
-                      type="button"
-                      title={message.isStarred ? "Yıldızı kaldır" : "Yıldızla"}
-                      onClick={() => void toggleStar(message)}
-                      className={`material-symbols-outlined ml-auto text-base transition-colors ${
-                        message.isStarred
-                          ? "text-amber-500"
-                          : "text-stone-300 hover:text-amber-500"
-                      }`}
-                      style={
-                        message.isStarred
-                          ? { fontVariationSettings: "'FILL' 1" }
-                          : undefined
-                      }
-                    >
-                      star
-                    </button>
-                    <button
-                      type="button"
-                      title={
-                        message.isPinned ? "Sabiti kaldır" : "Mesajı sabitle"
-                      }
-                      onClick={() => void togglePin(message)}
-                      className={`material-symbols-outlined text-base transition-colors ${
-                        message.isPinned
-                          ? "text-primary-container"
-                          : "text-stone-300 hover:text-primary-container"
-                      }`}
-                      style={
-                        message.isPinned
-                          ? { fontVariationSettings: "'FILL' 1" }
-                          : undefined
-                      }
-                    >
-                      push_pin
-                    </button>
                   </div>
-                  <div className="inline-block max-w-[85%] p-4 rounded-xl rounded-tl-sm bg-white text-stone-800 shadow-sm border border-stone-200">
-                    {renderMessageBody(message, false)}
+                  <div className="group/msg relative inline-flex max-w-[85%] items-center gap-1">
+                    <div className="rounded-xl rounded-tl-sm border border-stone-200 bg-white p-4 text-stone-800 shadow-sm">
+                      {renderMessageBody(message, false)}
+                    </div>
+                    <div className="relative shrink-0" data-message-menu>
+                      <button
+                        type="button"
+                        title="Mesaj seçenekleri"
+                        aria-label="Mesaj seçenekleri"
+                        onClick={() =>
+                          setMessageMenuId(menuOpen ? null : message.id)
+                        }
+                        className={`flex h-7 w-7 items-center justify-center rounded-full text-stone-400 transition-all hover:bg-stone-200/80 hover:text-stone-700 ${
+                          menuOpen
+                            ? "bg-stone-200/80 text-stone-700 opacity-100"
+                            : "opacity-40 hover:opacity-100 group-hover/msg:opacity-100 focus:opacity-100"
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-lg">
+                          expand_more
+                        </span>
+                      </button>
+                      {menuOpen && messageActions}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1386,11 +1717,59 @@ export default function ChatArea({
                 {uploading ? "hourglass_empty" : "add_circle"}
               </span>
             </button>
-            <div className="flex-1">
+            <div className="relative flex-1">
+              {mentionOpen && mentionSuggestions.length > 0 && (
+                <div className="absolute bottom-full left-0 right-0 z-20 mb-2 max-h-48 overflow-y-auto rounded-xl border border-stone-200 bg-white py-1 shadow-lg">
+                  <p className="px-3 py-1.5 font-hanken text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                    Üyeler
+                  </p>
+                  {mentionSuggestions.map((m, i) => (
+                    <button
+                      key={m.userId || m.username}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        applyMention(m.username);
+                      }}
+                      className={`flex w-full items-center gap-2 px-3 py-2 text-left font-hanken text-sm transition-colors ${
+                        i === mentionIndex
+                          ? "bg-primary-container/10 text-stone-900"
+                          : "text-stone-700 hover:bg-stone-50"
+                      }`}
+                    >
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-container/10 font-libre text-xs font-bold uppercase text-primary-container">
+                        {m.username.charAt(0) || "?"}
+                      </span>
+                      <span>@{m.username}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
               <textarea
                 ref={composerRef}
                 value={draft}
-                onChange={(e) => handleDraftChange(e.target.value)}
+                onChange={(e) =>
+                  handleDraftChange(e.target.value, e.target.selectionStart)
+                }
+                onClick={(e) =>
+                  syncMentionFromComposer(
+                    e.currentTarget.value,
+                    e.currentTarget.selectionStart
+                  )
+                }
+                onKeyUp={(e) => {
+                  if (
+                    e.key === "ArrowLeft" ||
+                    e.key === "ArrowRight" ||
+                    e.key === "Home" ||
+                    e.key === "End"
+                  ) {
+                    syncMentionFromComposer(
+                      e.currentTarget.value,
+                      e.currentTarget.selectionStart
+                    );
+                  }
+                }}
                 onKeyDown={handleKeyDown}
                 className="w-full bg-transparent border-none focus:ring-0 text-stone-900 placeholder:text-stone-400 py-2 custom-scrollbar resize-none max-h-32 text-sm outline-none font-hanken"
                 placeholder={

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -9,6 +8,7 @@ import {
   type MeetSessionState,
   type MeetSessionStreams,
 } from "@/services";
+import { readUserFromToken } from "@/lib/jwtUser";
 
 type Participant = { userId: string; username: string };
 
@@ -84,34 +84,6 @@ function Tile({
   );
 }
 
-function readUserFromToken(): { id: string; username: string } | null {
-  const token = localStorage.getItem("token");
-  if (!token) return null;
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1] ?? ""));
-    const id = String(
-      payload[
-        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"
-      ] ??
-        payload.sub ??
-        ""
-    );
-    const username = String(
-      payload[
-        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"
-      ] ??
-        payload.unique_name ??
-        payload.name ??
-        localStorage.getItem("username") ??
-        "Sen"
-    );
-    if (!id) return null;
-    return { id, username };
-  } catch {
-    return null;
-  }
-}
-
 export default function MeetRoomPage() {
   const params = useParams();
   const router = useRouter();
@@ -145,9 +117,7 @@ export default function MeetRoomPage() {
   useEffect(() => {
     const u = readUserFromToken();
     if (!u) {
-      router.replace(
-        `/login?returnUrl=${encodeURIComponent(`/meet/${roomCode}`)}`
-      );
+      router.replace("/login");
       return;
     }
     setUser(u);
@@ -251,57 +221,67 @@ export default function MeetRoomPage() {
       : participants;
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#0a0506] text-white">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3 sm:px-6">
-        <div>
-          <p className="font-libre text-lg">micodex</p>
-          <p className="font-hanken text-xs text-white/45">
-            Görüşme · {roomCode}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+    <div className="relative flex min-h-screen flex-col bg-background text-stone-900">
+      <div
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_-5%,rgba(173,40,49,0.12),transparent_55%)]"
+        aria-hidden
+      />
+
+      <header className="relative z-10 flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 bg-white/80 px-4 py-3 backdrop-blur-sm sm:px-6">
+        <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => void copyLink()}
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 font-hanken text-xs font-semibold transition hover:bg-white/10"
+            onClick={() => router.push("/meet")}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-2 font-hanken text-sm font-medium text-stone-600 shadow-sm transition hover:border-primary-container/40 hover:text-primary-container"
           >
-            <span className="material-symbols-outlined text-base">
-              {copied ? "check" : "link"}
-            </span>
-            {copied ? "Kopyalandı" : "Linki kopyala"}
+            <span className="material-symbols-outlined text-lg">arrow_back</span>
+            Geri
           </button>
-          <Link
-            href="/app"
-            className="rounded-full px-3 py-1.5 font-hanken text-xs text-white/50 hover:text-white"
-          >
-            Uygulama
-          </Link>
+          <div>
+            <p className="font-libre text-lg text-stone-900">micodex</p>
+            <p className="font-hanken text-xs text-stone-500">
+              Toplantı · {roomCode}
+            </p>
+          </div>
         </div>
+        <button
+          type="button"
+          onClick={() => void copyLink()}
+          className="inline-flex items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 py-1.5 font-hanken text-xs font-semibold text-stone-700 shadow-sm transition hover:border-primary-container/40 hover:text-primary-container"
+        >
+          <span className="material-symbols-outlined text-base">
+            {copied ? "check" : "link"}
+          </span>
+          {copied ? "Kopyalandı" : "Linki kopyala"}
+        </button>
       </header>
 
-      <main className="flex flex-1 flex-col items-center justify-center gap-6 px-4 py-8">
+      <main className="relative z-10 flex flex-1 flex-col items-center justify-center gap-6 px-4 py-8">
         {sessionState.error && (
-          <p className="max-w-md rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-center font-hanken text-sm text-red-200">
+          <p className="max-w-md rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center font-hanken text-sm text-red-700">
             {sessionState.error}
           </p>
         )}
 
         {!joined ? (
-          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-white/5 p-8 text-center">
-            <span className="material-symbols-outlined text-5xl text-[#e1bfbd]">
-              videocam
-            </span>
-            <h1 className="mt-4 font-hanken text-xl font-bold">
-              Görüşmeye katıl
+          <div className="w-full max-w-md rounded-3xl border border-stone-200 bg-white p-8 text-center shadow-xl shadow-stone-200/60">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-container/10">
+              <span className="material-symbols-outlined text-3xl text-primary-container">
+                videocam
+              </span>
+            </div>
+            <h1 className="mt-4 font-hanken text-xl font-bold text-stone-900">
+              Toplantıya katıl
             </h1>
-            <p className="mt-2 break-all font-hanken text-xs text-white/50">
-              {inviteUrl}
+            <p className="mt-2 font-hanken text-sm text-stone-500">
+              Kameranı açıp görüşmeye başlayabilirsin. Linki arkadaşlarınla
+              paylaşmak için sağ üstteki butonu kullan.
             </p>
             <button
               type="button"
               disabled={busy || !user}
               onClick={() => void handleJoin()}
-              className="mt-6 w-full rounded-xl bg-primary-container py-3 font-hanken text-sm font-semibold text-white disabled:opacity-50"
+              className="mt-6 w-full rounded-xl bg-primary-container py-3 font-hanken text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
             >
               {busy ? "Bağlanıyor..." : "Kamerayı aç ve katıl"}
             </button>
@@ -341,10 +321,10 @@ export default function MeetRoomPage() {
                 onClick={() =>
                   sessionRef.current?.setMuted(!sessionState.muted)
                 }
-                className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 font-hanken text-sm font-semibold ${
+                className={`inline-flex items-center gap-2 rounded-full border px-4 py-2.5 font-hanken text-sm font-semibold shadow-sm ${
                   sessionState.muted
-                    ? "bg-red-500/20 text-red-200"
-                    : "bg-white/10 text-white"
+                    ? "border-red-200 bg-red-50 text-red-700"
+                    : "border-stone-200 bg-white text-stone-700"
                 }`}
               >
                 <span className="material-symbols-outlined text-lg">
@@ -357,10 +337,10 @@ export default function MeetRoomPage() {
                 onClick={() =>
                   void sessionRef.current?.setCameraOn(!sessionState.cameraOn)
                 }
-                className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 font-hanken text-sm font-semibold ${
+                className={`inline-flex items-center gap-2 rounded-full border px-4 py-2.5 font-hanken text-sm font-semibold shadow-sm ${
                   sessionState.cameraOn
-                    ? "bg-white/10 text-white"
-                    : "bg-red-500/20 text-red-200"
+                    ? "border-stone-200 bg-white text-stone-700"
+                    : "border-red-200 bg-red-50 text-red-700"
                 }`}
               >
                 <span className="material-symbols-outlined text-lg">

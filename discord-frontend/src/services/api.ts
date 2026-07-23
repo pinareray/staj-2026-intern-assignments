@@ -43,7 +43,8 @@ export async function authFetch(path: string, init: RequestInit = {}) {
     headers,
   });
 
-  if (response.status === 401 || response.status === 403) {
+  // 403 = yetki yok (oturumu düşürme); sadece geçersiz/süresi dolmuş token'da 401.
+  if (response.status === 401) {
     clearAuthAndRedirectToLogin();
     throw new Error("Yetkisiz");
   }
@@ -266,7 +267,7 @@ export async function uploadMessageFile(
     body: formData,
   });
 
-  if (response.status === 401 || response.status === 403) {
+  if (response.status === 401) {
     clearAuthAndRedirectToLogin();
     throw new Error("Yetkisiz");
   }

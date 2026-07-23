@@ -32,6 +32,7 @@ namespace Persistence
             services.AddScoped<IStarredMessageRepository, StarredMessageRepository>();
             services.AddScoped<IUserBlockRepository, UserBlockRepository>();
             services.AddScoped<IUserReportRepository, UserReportRepository>();
+            services.AddScoped<INotificationRepository, NotificationRepository>();
 
             return services;
         }

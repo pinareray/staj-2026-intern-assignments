@@ -111,7 +111,7 @@ export default function DmSidebar({
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         localStorage.removeItem("token");
         router.push("/login");
         return;

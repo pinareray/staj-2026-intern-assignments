@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { API_BASE_URL } from "@/services";
 import type { ChannelItem } from "@/models";
@@ -34,6 +33,7 @@ type FriendsListProps = {
   onServersChanged?: () => void;
   /** Açılışta seçilecek sekme */
   initialTab?: "incoming" | "outgoing" | "friends" | "invites";
+  onCollapse?: () => void;
 };
 
 function normalizeUsername(value: string) {
@@ -57,6 +57,7 @@ export default function FriendsList({
   onDmAccepted,
   onServersChanged,
   initialTab = "friends",
+  onCollapse,
 }: FriendsListProps) {
   const router = useRouter();
   const [friends, setFriends] = useState<FriendItem[]>([]);
@@ -69,15 +70,10 @@ export default function FriendsList({
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
-  const [mounted, setMounted] = useState(false);
   const [tab, setTab] = useState<
     "incoming" | "outgoing" | "friends" | "invites"
   >("friends");
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const loadFriends = useCallback(async () => {
     const token = localStorage.getItem("token");
@@ -206,21 +202,12 @@ export default function FriendsList({
   }, [isOpen, refreshSocial, initialTab]);
 
   useEffect(() => {
-    if (!isOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [isOpen, onClose]);
-
-  useEffect(() => {
     return () => {
       if (searchTimer.current) clearTimeout(searchTimer.current);
     };
   }, []);
 
-  if (!isOpen || !mounted) return null;
+  if (!isOpen) return null;
 
   const handleUsernameChange = (value: string) => {
     const withoutAt = value.replace(/^@*/, "");
@@ -518,378 +505,368 @@ export default function FriendsList({
   const showSearchPanel = queryLen >= 2 || searchResults.length > 0 || searching;
 
   const panel = (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6">
-      <button
-        type="button"
-        aria-label="Kapat"
-        className="absolute inset-0 bg-stone-900/45 backdrop-blur-[2px]"
-        onClick={onClose}
-      />
-
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="friends-dialog-title"
-        className="relative z-[210] flex flex-col overflow-hidden rounded-2xl border border-outline-variant bg-surface shadow-2xl"
-        style={{ width: "min(100%, 420px)", maxHeight: "min(90vh, 720px)" }}
-      >
-        <header className="flex shrink-0 items-center justify-between border-b border-outline-variant px-5 py-4">
-          <div>
-            <h2
-              id="friends-dialog-title"
-              className="font-libre text-xl text-on-surface"
+    <aside className="flex h-full min-w-0 flex-1 flex-col bg-surface-container-low">
+      <header className="flex h-16 shrink-0 items-center justify-between border-b border-stone-200 px-4">
+        <div className="min-w-0">
+          <h2 className="font-libre text-lg text-stone-900">Arkadaşlar</h2>
+        </div>
+        <div className="flex items-center gap-1">
+          {onCollapse && (
+            <button
+              type="button"
+              title="Paneli gizle"
+              onClick={onCollapse}
+              className="rounded-lg p-1.5 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 md:hidden"
             >
-              Arkadaşlar
-            </h2>
-            <p className="mt-0.5 font-hanken text-xs text-on-surface-variant">
-              Kullanıcı adı ile ara · istek gönder
-            </p>
-          </div>
+              <span className="material-symbols-outlined text-xl">
+                expand_more
+              </span>
+            </button>
+          )}
           <button
             type="button"
+            title="Kapat"
             onClick={onClose}
-            className="rounded-full p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-on-surface"
+            className="rounded-lg p-1.5 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700"
           >
-            <span className="material-symbols-outlined">close</span>
+            <span className="material-symbols-outlined text-xl">close</span>
           </button>
-        </header>
+        </div>
+      </header>
 
-        <form
-          onSubmit={handleSearchSubmit}
-          className="shrink-0 space-y-2 border-b border-outline-variant px-5 py-4"
-        >
-          <label className="block font-hanken text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-            Kullanıcı ara
-          </label>
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base text-on-surface-variant">
-                search
-              </span>
-              <input
-                value={username}
-                onFocus={() => {
-                  if (!username.startsWith("@")) {
-                    setUsername(`@${username}`);
-                  }
-                }}
-                onChange={(e) => handleUsernameChange(e.target.value)}
-                placeholder="@kullanici_adi"
-                disabled={sending}
-                className="w-full rounded-xl border border-outline-variant bg-surface-container-low py-2.5 pl-9 pr-3 font-hanken text-sm text-on-surface outline-none focus:ring-1 focus:ring-primary-container/40"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={sending || queryLen < 2}
-              className="rounded-xl bg-primary-container px-4 font-hanken text-sm font-semibold text-on-primary transition-colors hover:bg-secondary-container disabled:opacity-50"
-            >
-              Ara
-            </button>
+      <form
+        onSubmit={handleSearchSubmit}
+        className="shrink-0 space-y-2 border-b border-stone-200 px-4 py-3"
+      >
+        <label className="block font-hanken text-[10px] font-bold uppercase tracking-widest text-stone-500">
+          Kullanıcı ara
+        </label>
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base text-stone-400">
+              search
+            </span>
+            <input
+              value={username}
+              onFocus={() => {
+                if (!username.startsWith("@")) {
+                  setUsername(`@${username}`);
+                }
+              }}
+              onChange={(e) => handleUsernameChange(e.target.value)}
+              placeholder="@kullanici_adi"
+              disabled={sending}
+              className="w-full rounded-xl border border-stone-200 bg-white py-2.5 pl-9 pr-3 font-hanken text-sm text-stone-900 outline-none focus:ring-1 focus:ring-primary-container/40"
+            />
           </div>
-          {error && <p className="font-hanken text-xs text-red-600">{error}</p>}
-          {success && (
-            <p className="font-hanken text-xs text-emerald-700">{success}</p>
-          )}
+          <button
+            type="submit"
+            disabled={sending || queryLen < 2}
+            className="rounded-xl bg-primary-container px-3 font-hanken text-sm font-semibold text-white transition-colors hover:bg-[#8f1b1c] disabled:opacity-50"
+          >
+            Ara
+          </button>
+        </div>
+        {error && <p className="font-hanken text-xs text-red-600">{error}</p>}
+        {success && (
+          <p className="font-hanken text-xs text-emerald-700">{success}</p>
+        )}
 
-          {showSearchPanel && (
-            <div className="max-h-40 space-y-1.5 overflow-y-auto rounded-xl border border-outline-variant bg-surface-container-low p-2 custom-scrollbar">
-              {searching && (
-                <p className="px-2 py-1.5 font-hanken text-xs text-on-surface-variant">
-                  Aranıyor...
-                </p>
-              )}
-              {!searching && searchResults.length === 0 && queryLen >= 2 && (
-                <p className="px-2 py-1.5 font-hanken text-xs text-on-surface-variant">
-                  &quot;{normalizeUsername(username)}&quot; için sonuç yok.
-                </p>
-              )}
-              {!searching &&
-                searchResults.map((u) => {
-                  const rel = relationFor(u.id, u.username);
-                  const isFriend = rel?.status === "Accepted";
-                  const isPending = rel?.status === "Pending";
-                  return (
-                    <div
-                      key={u.id}
-                      className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-surface"
-                    >
-                      <Avatar name={u.username} />
-                      <button
-                        type="button"
-                        onClick={() => openProfile(u.username)}
-                        className="min-w-0 flex-1 truncate text-left font-hanken text-sm text-on-surface hover:text-primary-container hover:underline"
-                      >
-                        @{u.username}
-                      </button>
-                      {isFriend ? (
-                        <span className="font-hanken text-[10px] font-semibold text-emerald-700">
-                          Arkadaş
-                        </span>
-                      ) : isPending ? (
-                        <span className="font-hanken text-[10px] text-on-surface-variant">
-                          Bekliyor
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={sending}
-                          onClick={() => void sendFriendRequest(u.username)}
-                          className="rounded-lg bg-primary-container px-2.5 py-1 font-hanken text-[11px] font-semibold text-on-primary hover:bg-secondary-container disabled:opacity-50"
-                        >
-                          Ekle
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-            </div>
-          )}
-        </form>
-
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div className="shrink-0 border-b border-outline-variant px-3 pt-3">
-            <div className="flex gap-1">
-              {(
-                [
-                  {
-                    id: "incoming" as const,
-                    label: "Gelen",
-                    count: incoming.length,
-                  },
-                  {
-                    id: "outgoing" as const,
-                    label: "Giden",
-                    count: outgoing.length,
-                  },
-                  {
-                    id: "invites" as const,
-                    label: "Davetler",
-                    count: serverInvites.length,
-                  },
-                  {
-                    id: "friends" as const,
-                    label: "Arkadaşlar",
-                    count: accepted.length,
-                  },
-                ] as const
-              ).map((t) => {
-                const active = tab === t.id;
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setTab(t.id)}
-                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-t-xl px-2 py-2.5 font-hanken text-xs font-semibold transition-colors ${
-                      active
-                        ? "bg-surface-container-low text-primary-container"
-                        : "text-on-surface-variant hover:bg-surface-container-low/60 hover:text-on-surface"
-                    }`}
-                  >
-                    <span className="truncate">{t.label}</span>
-                    <span
-                      className={`rounded-md px-1.5 py-0.5 text-[10px] ${
-                        active
-                          ? "bg-primary-container/15 text-primary-container"
-                          : "bg-surface-container-highest text-on-surface-variant"
-                      }`}
-                    >
-                      {t.count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-4 custom-scrollbar">
-            {loading && (
-              <p className="font-hanken text-sm text-on-surface-variant">
-                Yükleniyor...
+        {showSearchPanel && (
+          <div className="custom-scrollbar max-h-36 space-y-1.5 overflow-y-auto rounded-xl border border-stone-200 bg-white p-2">
+            {searching && (
+              <p className="px-2 py-1.5 font-hanken text-xs text-stone-500">
+                Aranıyor...
               </p>
             )}
-
-            {!loading && tab === "incoming" && (
-              <>
-                {incoming.length === 0 ? (
-                  <p className="rounded-xl border border-dashed border-outline-variant px-3 py-6 text-center font-hanken text-sm text-on-surface-variant">
-                    Gelen istek yok.
-                  </p>
-                ) : (
-                  incoming.map((f) => (
-                    <div
-                      key={f.friendshipId}
-                      className="flex items-center gap-3 rounded-xl border border-outline-variant bg-surface-container-low p-3"
-                    >
-                      <Avatar name={f.username} />
-                      <div className="min-w-0 flex-1">
-                        <button
-                          type="button"
-                          onClick={() => openProfile(f.username)}
-                          className="truncate text-left font-hanken text-sm font-medium text-on-surface hover:text-primary-container hover:underline"
-                        >
-                          @{f.username}
-                        </button>
-                        <p className="text-[10px] text-on-surface-variant">
-                          Seni arkadaş olarak eklemek istiyor
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 gap-1.5">
-                        <button
-                          type="button"
-                          disabled={actionId === f.friendshipId}
-                          onClick={() => void handleAccept(f.friendshipId)}
-                          className="rounded-lg bg-primary-container px-2.5 py-1.5 font-hanken text-xs font-semibold text-on-primary transition-colors hover:bg-secondary-container disabled:opacity-50"
-                        >
-                          Kabul
-                        </button>
-                        <button
-                          type="button"
-                          disabled={actionId === f.friendshipId}
-                          onClick={() => void handleReject(f.friendshipId)}
-                          className="rounded-lg border border-outline-variant bg-surface px-2.5 py-1.5 font-hanken text-xs font-semibold text-on-surface-variant transition-colors hover:border-red-300 hover:text-red-600 disabled:opacity-50"
-                        >
-                          Reddet
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </>
+            {!searching && searchResults.length === 0 && queryLen >= 2 && (
+              <p className="px-2 py-1.5 font-hanken text-xs text-stone-500">
+                &quot;{normalizeUsername(username)}&quot; için sonuç yok.
+              </p>
             )}
-
-            {!loading && tab === "outgoing" && (
-              <>
-                {outgoing.length === 0 ? (
-                  <p className="rounded-xl border border-dashed border-outline-variant px-3 py-6 text-center font-hanken text-sm text-on-surface-variant">
-                    Bekleyen giden istek yok.
-                  </p>
-                ) : (
-                  outgoing.map((f) => (
-                    <div
-                      key={f.friendshipId}
-                      className="flex items-center gap-3 rounded-xl border border-outline-variant bg-surface-container-low p-3"
+            {!searching &&
+              searchResults.map((u) => {
+                const rel = relationFor(u.id, u.username);
+                const isFriend = rel?.status === "Accepted";
+                const isPending = rel?.status === "Pending";
+                return (
+                  <div
+                    key={u.id}
+                    className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-stone-50"
+                  >
+                    <Avatar name={u.username} />
+                    <button
+                      type="button"
+                      onClick={() => openProfile(u.username)}
+                      className="min-w-0 flex-1 truncate text-left font-hanken text-sm text-stone-800 hover:text-primary-container hover:underline"
                     >
-                      <Avatar name={f.username} />
-                      <div className="min-w-0 flex-1">
-                        <button
-                          type="button"
-                          onClick={() => openProfile(f.username)}
-                          className="truncate text-left font-hanken text-sm font-medium text-on-surface hover:text-primary-container hover:underline"
-                        >
-                          @{f.username}
-                        </button>
-                        <p className="text-[10px] text-on-surface-variant">
-                          Yanıt bekleniyor
-                        </p>
-                      </div>
+                      @{u.username}
+                    </button>
+                    {isFriend ? (
+                      <span className="font-hanken text-[10px] font-semibold text-emerald-700">
+                        Arkadaş
+                      </span>
+                    ) : isPending ? (
+                      <span className="font-hanken text-[10px] text-stone-500">
+                        Bekliyor
+                      </span>
+                    ) : (
                       <button
                         type="button"
-                        disabled={actionId === f.friendshipId}
-                        onClick={() => void handleReject(f.friendshipId, true)}
-                        className="shrink-0 rounded-lg border border-outline-variant bg-surface px-2.5 py-1.5 font-hanken text-xs font-semibold text-on-surface-variant transition-colors hover:text-on-surface disabled:opacity-50"
+                        disabled={sending}
+                        onClick={() => void sendFriendRequest(u.username)}
+                        className="rounded-lg bg-primary-container px-2.5 py-1 font-hanken text-[11px] font-semibold text-white hover:bg-[#8f1b1c] disabled:opacity-50"
                       >
-                        İptal
+                        Ekle
                       </button>
-                    </div>
-                  ))
-                )}
-              </>
-            )}
+                    )}
+                  </div>
+                );
+              })}
+          </div>
+        )}
+      </form>
 
-            {!loading && tab === "invites" && (
-              <>
-                {serverInvites.length === 0 ? (
-                  <p className="rounded-xl border border-dashed border-outline-variant px-3 py-6 text-center font-hanken text-sm text-on-surface-variant">
-                    Bekleyen sunucu daveti yok.
-                  </p>
-                ) : (
-                  serverInvites.map((invite) => (
-                    <div
-                      key={invite.inviteId}
-                      className="flex items-center gap-3 rounded-xl border border-outline-variant bg-surface-container-low p-3"
-                    >
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-container/15">
-                        <span className="font-libre text-sm font-bold uppercase text-primary-container">
-                          {invite.serverName.charAt(0) || "S"}
-                        </span>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-hanken text-sm font-medium text-on-surface">
-                          {invite.serverName}
-                        </p>
-                        <p className="text-[10px] text-on-surface-variant">
-                          @{invite.inviterUsername} davet etti
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 gap-1.5">
-                        <button
-                          type="button"
-                          disabled={actionId === invite.inviteId}
-                          onClick={() =>
-                            void handleAcceptServerInvite(invite.inviteId)
-                          }
-                          className="rounded-lg bg-primary-container px-2.5 py-1.5 font-hanken text-xs font-semibold text-on-primary transition-colors hover:bg-secondary-container disabled:opacity-50"
-                        >
-                          Kabul
-                        </button>
-                        <button
-                          type="button"
-                          disabled={actionId === invite.inviteId}
-                          onClick={() =>
-                            void handleRejectServerInvite(invite.inviteId)
-                          }
-                          className="rounded-lg border border-outline-variant bg-surface px-2.5 py-1.5 font-hanken text-xs font-semibold text-on-surface-variant transition-colors hover:border-red-300 hover:text-red-600 disabled:opacity-50"
-                        >
-                          Reddet
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </>
-            )}
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="shrink-0 border-b border-stone-200 px-2 pt-2">
+          <div className="flex gap-0.5">
+            {(
+              [
+                {
+                  id: "incoming" as const,
+                  label: "Gelen",
+                  count: incoming.length,
+                },
+                {
+                  id: "outgoing" as const,
+                  label: "Giden",
+                  count: outgoing.length,
+                },
+                {
+                  id: "invites" as const,
+                  label: "Davetler",
+                  count: serverInvites.length,
+                },
+                {
+                  id: "friends" as const,
+                  label: "Arkadaşlar",
+                  count: accepted.length,
+                },
+              ] as const
+            ).map((t) => {
+              const active = tab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTab(t.id)}
+                  className={`flex flex-1 flex-col items-center gap-0.5 rounded-t-lg px-1 py-2 font-hanken text-[10px] font-semibold transition-colors sm:flex-row sm:justify-center sm:gap-1 sm:text-xs ${
+                    active
+                      ? "bg-white text-primary-container"
+                      : "text-stone-500 hover:bg-white/60 hover:text-stone-800"
+                  }`}
+                >
+                  <span className="truncate">{t.label}</span>
+                  <span
+                    className={`rounded-md px-1.5 py-0.5 text-[10px] ${
+                      active
+                        ? "bg-primary-container/15 text-primary-container"
+                        : "bg-stone-200/80 text-stone-500"
+                    }`}
+                  >
+                    {t.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-            {!loading && tab === "friends" && (
-              <>
-                {accepted.length === 0 ? (
-                  <p className="rounded-xl border border-dashed border-outline-variant px-3 py-6 text-center font-hanken text-sm text-on-surface-variant">
-                    Henüz arkadaşın yok. Yukarıdan kullanıcı adı ile ara.
-                  </p>
-                ) : (
-                  accepted.map((f) => (
-                    <div
-                      key={f.friendshipId}
-                      className="flex w-full items-center gap-3 rounded-xl border border-transparent p-3 transition-colors hover:border-outline-variant hover:bg-surface-container-low"
-                    >
+        <div className="custom-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-3">
+          {loading && (
+            <p className="font-hanken text-sm text-stone-500">Yükleniyor...</p>
+          )}
+
+          {!loading && tab === "incoming" && (
+            <>
+              {incoming.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-stone-200 px-3 py-6 text-center font-hanken text-sm text-stone-500">
+                  Gelen istek yok.
+                </p>
+              ) : (
+                incoming.map((f) => (
+                  <div
+                    key={f.friendshipId}
+                    className="flex items-center gap-3 rounded-xl border border-stone-200 bg-white p-3"
+                  >
+                    <Avatar name={f.username} />
+                    <div className="min-w-0 flex-1">
                       <button
                         type="button"
                         onClick={() => openProfile(f.username)}
-                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                        className="truncate text-left font-hanken text-sm font-medium text-stone-900 hover:text-primary-container hover:underline"
                       >
-                        <Avatar name={f.username} />
-                        <p className="truncate font-hanken text-sm text-on-surface">
-                          @{f.username}
-                        </p>
+                        @{f.username}
+                      </button>
+                      <p className="text-[10px] text-stone-500">
+                        Seni arkadaş olarak eklemek istiyor
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 flex-col gap-1.5">
+                      <button
+                        type="button"
+                        disabled={actionId === f.friendshipId}
+                        onClick={() => void handleAccept(f.friendshipId)}
+                        className="rounded-lg bg-primary-container px-2.5 py-1.5 font-hanken text-xs font-semibold text-white hover:bg-[#8f1b1c] disabled:opacity-50"
+                      >
+                        Kabul
                       </button>
                       <button
                         type="button"
                         disabled={actionId === f.friendshipId}
-                        onClick={() => void handleMessage(f)}
-                        className="shrink-0 rounded-lg bg-primary-container/15 px-3 py-1.5 font-hanken text-xs font-semibold text-primary-container transition-colors hover:bg-primary-container/25 disabled:opacity-50"
+                        onClick={() => void handleReject(f.friendshipId)}
+                        className="rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 font-hanken text-xs font-semibold text-stone-500 hover:border-red-300 hover:text-red-600 disabled:opacity-50"
                       >
-                        Mesaj
+                        Reddet
                       </button>
                     </div>
-                  ))
-                )}
-              </>
-            )}
-          </div>
+                  </div>
+                ))
+              )}
+            </>
+          )}
+
+          {!loading && tab === "outgoing" && (
+            <>
+              {outgoing.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-stone-200 px-3 py-6 text-center font-hanken text-sm text-stone-500">
+                  Bekleyen giden istek yok.
+                </p>
+              ) : (
+                outgoing.map((f) => (
+                  <div
+                    key={f.friendshipId}
+                    className="flex items-center gap-3 rounded-xl border border-stone-200 bg-white p-3"
+                  >
+                    <Avatar name={f.username} />
+                    <div className="min-w-0 flex-1">
+                      <button
+                        type="button"
+                        onClick={() => openProfile(f.username)}
+                        className="truncate text-left font-hanken text-sm font-medium text-stone-900 hover:text-primary-container hover:underline"
+                      >
+                        @{f.username}
+                      </button>
+                      <p className="text-[10px] text-stone-500">
+                        Yanıt bekleniyor
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={actionId === f.friendshipId}
+                      onClick={() => void handleReject(f.friendshipId, true)}
+                      className="shrink-0 rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 font-hanken text-xs font-semibold text-stone-500 hover:text-stone-800 disabled:opacity-50"
+                    >
+                      İptal
+                    </button>
+                  </div>
+                ))
+              )}
+            </>
+          )}
+
+          {!loading && tab === "invites" && (
+            <>
+              {serverInvites.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-stone-200 px-3 py-6 text-center font-hanken text-sm text-stone-500">
+                  Bekleyen sunucu daveti yok.
+                </p>
+              ) : (
+                serverInvites.map((invite) => (
+                  <div
+                    key={invite.inviteId}
+                    className="flex items-center gap-3 rounded-xl border border-stone-200 bg-white p-3"
+                  >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-container/15">
+                      <span className="font-libre text-sm font-bold uppercase text-primary-container">
+                        {invite.serverName.charAt(0) || "S"}
+                      </span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-hanken text-sm font-medium text-stone-900">
+                        {invite.serverName}
+                      </p>
+                      <p className="text-[10px] text-stone-500">
+                        @{invite.inviterUsername} davet etti
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 flex-col gap-1.5">
+                      <button
+                        type="button"
+                        disabled={actionId === invite.inviteId}
+                        onClick={() =>
+                          void handleAcceptServerInvite(invite.inviteId)
+                        }
+                        className="rounded-lg bg-primary-container px-2.5 py-1.5 font-hanken text-xs font-semibold text-white hover:bg-[#8f1b1c] disabled:opacity-50"
+                      >
+                        Kabul
+                      </button>
+                      <button
+                        type="button"
+                        disabled={actionId === invite.inviteId}
+                        onClick={() =>
+                          void handleRejectServerInvite(invite.inviteId)
+                        }
+                        className="rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 font-hanken text-xs font-semibold text-stone-500 hover:border-red-300 hover:text-red-600 disabled:opacity-50"
+                      >
+                        Reddet
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </>
+          )}
+
+          {!loading && tab === "friends" && (
+            <>
+              {accepted.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-stone-200 px-3 py-6 text-center font-hanken text-sm text-stone-500">
+                  Henüz arkadaşın yok. Yukarıdan kullanıcı adı ile ara.
+                </p>
+              ) : (
+                accepted.map((f) => (
+                  <div
+                    key={f.friendshipId}
+                    className="flex w-full items-center gap-3 rounded-xl border border-transparent p-3 transition-colors hover:border-stone-200 hover:bg-white"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => openProfile(f.username)}
+                      className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                    >
+                      <Avatar name={f.username} />
+                      <p className="truncate font-hanken text-sm text-stone-900">
+                        @{f.username}
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={actionId === f.friendshipId}
+                      onClick={() => void handleMessage(f)}
+                      className="shrink-0 rounded-lg bg-primary-container/15 px-3 py-1.5 font-hanken text-xs font-semibold text-primary-container transition-colors hover:bg-primary-container/25 disabled:opacity-50"
+                    >
+                      Mesaj
+                    </button>
+                  </div>
+                ))
+              )}
+            </>
+          )}
         </div>
       </div>
-    </div>
+    </aside>
   );
 
-  return createPortal(panel, document.body);
+  return panel;
 }

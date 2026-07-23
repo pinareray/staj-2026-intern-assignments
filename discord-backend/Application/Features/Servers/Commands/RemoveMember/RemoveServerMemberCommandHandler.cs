@@ -1,3 +1,4 @@
+using Application.Common;
 using Application.Interfaces;
 using Application.Repositories;
 using MediatR;
@@ -29,18 +30,20 @@ namespace Application.Features.Servers.Commands.RemoveMember
             CancellationToken cancellationToken)
         {
             var currentUserId = _userContextService.GetCurrentUserId();
-            var server = await _serverRepository.GetByIdAsync(request.ServerId);
-            if (server == null)
-            {
-                throw new Exception("Sunucu bulunamadı.");
-            }
+            var server = await _serverRepository.GetByIdAsync(request.ServerId)
+                ?? throw new Exception("Sunucu bulunamadı.");
 
-            var callerIsMember = await _serverRepository.IsMemberAsync(
+            var caller = await _serverRepository.GetMembershipAsync(
                 request.ServerId,
                 currentUserId);
-            if (!callerIsMember)
+            if (caller == null || !ServerRoles.CanManageMembers(caller.Role))
             {
-                throw new Exception("Bu sunucudan üye çıkarma yetkiniz yok.");
+                throw new Exception("Üye çıkarmak için sahip veya yönetici olmalısın.");
+            }
+
+            if (request.UserId == currentUserId)
+            {
+                throw new Exception("Kendini sunucudan çıkaramazsın. Ayrıl seçeneğini kullan.");
             }
 
             var targetMembership = await _serverRepository.GetMembershipAsync(
@@ -51,9 +54,15 @@ namespace Application.Features.Servers.Commands.RemoveMember
                 throw new Exception("Kullanıcı bu sunucunun üyesi değil.");
             }
 
-            if (string.Equals(targetMembership.Role, "Owner", StringComparison.OrdinalIgnoreCase))
+            if (ServerRoles.IsOwner(targetMembership.Role) || server.OwnerId == request.UserId)
             {
                 throw new Exception("Sunucu sahibi çıkarılamaz.");
+            }
+
+            // Admin yalnızca normal üyeleri çıkarabilir; Admin'i sadece Owner çıkarır.
+            if (ServerRoles.IsAdmin(targetMembership.Role) && !ServerRoles.IsOwner(caller.Role))
+            {
+                throw new Exception("Yöneticiyi yalnızca sunucu sahibi çıkarabilir.");
             }
 
             await _serverRepository.RemoveMemberAsync(request.ServerId, request.UserId);

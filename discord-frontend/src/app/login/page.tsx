@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, Suspense, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { FormEvent, useMemo, useState } from "react";
 import AuthCard from "@/components/auth/AuthCard";
 import AuthDivider from "@/components/auth/AuthDivider";
 import AuthField from "@/components/auth/AuthField";
@@ -15,10 +15,8 @@ import {
 } from "@/lib/authValidation";
 import { cacheCurrentUserProfile, API_BASE_URL } from "@/services";
 
-function LoginForm() {
+export default function LoginPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const returnUrl = searchParams.get("returnUrl");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -73,16 +71,11 @@ function LoginForm() {
 
       localStorage.setItem("token", token);
       await cacheCurrentUserProfile();
-
-      const safeReturn =
-        returnUrl && returnUrl.startsWith("/") && !returnUrl.startsWith("//")
-          ? returnUrl
-          : "/app";
-      router.push(safeReturn);
+      router.push("/app");
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         setError(
-          "İstek zaman aşımına uğradı. Veritabanı bağlantısını (Supabase/hotspot) kontrol et."
+          "İstek zaman aşımına uğradı. Backend bağlantısını kontrol et."
         );
       } else {
         setError("Sunucuya bağlanılamadı. Backend'in çalıştığından emin olun.");
@@ -173,19 +166,5 @@ function LoginForm() {
         </p>
       </AuthCard>
     </AuthShell>
-  );
-}
-
-export default function LoginPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-screen items-center justify-center bg-[#14080a] text-[#e1bfbd]/70">
-          <p className="font-hanken text-sm">Yükleniyor...</p>
-        </div>
-      }
-    >
-      <LoginForm />
-    </Suspense>
   );
 }

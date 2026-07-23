@@ -13,17 +13,20 @@ namespace Application.Features.Dms.Commands.OpenDm
         private readonly IFriendshipRepository _friendshipRepository;
         private readonly IDmChannelService _dmChannelService;
         private readonly IUserRepository _userRepository;
+        private readonly IUserBlockRepository _blockRepository;
 
         public OpenDmCommandHandler(
             IUserContextService userContextService,
             IFriendshipRepository friendshipRepository,
             IDmChannelService dmChannelService,
-            IUserRepository userRepository)
+            IUserRepository userRepository,
+            IUserBlockRepository blockRepository)
         {
             _userContextService = userContextService;
             _friendshipRepository = friendshipRepository;
             _dmChannelService = dmChannelService;
             _userRepository = userRepository;
+            _blockRepository = blockRepository;
         }
 
         public async Task<object> Handle(OpenDmCommand request, CancellationToken cancellationToken)
@@ -33,6 +36,11 @@ namespace Application.Features.Dms.Commands.OpenDm
             if (request.FriendUserId == currentUserId)
             {
                 throw new Exception("Kendinize DM açılamaz.");
+            }
+
+            if (await _blockRepository.IsBlockedEitherWayAsync(currentUserId, request.FriendUserId))
+            {
+                throw new Exception("Engellenmiş bir kullanıcıyla mesajlaşamazsınız.");
             }
 
             var friendship = await _friendshipRepository.GetBetweenUsersAsync(

@@ -28,7 +28,8 @@ namespace Infrastructure.Security
             var claims = new List<Claim>
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new Claim(ClaimTypes.Email, user.Email)
+                new Claim(ClaimTypes.Email, user.Email),
+                new Claim(ClaimTypes.Name, user.Username)
             };
 
             if (user.IsPlatformAdmin)
@@ -49,10 +50,18 @@ namespace Infrastructure.Security
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(securityKey));
             var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha512Signature);
 
+            // Oturum: kullanıcı çıkış yapana / veriyi temizleyene kadar uzun süre geçerli kalsın.
+            var daysRaw = _configuration["TokenOptions:AccessTokenExpirationDays"];
+            var days = 90;
+            if (int.TryParse(daysRaw, out var parsedDays) && parsedDays > 0)
+            {
+                days = parsedDays;
+            }
+
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = new ClaimsIdentity(claims),
-                Expires = DateTime.UtcNow.AddDays(7),
+                Expires = DateTime.UtcNow.AddDays(days),
                 Issuer = _configuration["TokenOptions:Issuer"],
                 Audience = _configuration["TokenOptions:Audience"],
                 SigningCredentials = credentials

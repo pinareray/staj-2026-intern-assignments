@@ -4,6 +4,7 @@ using Application.Features.Auth.Commands.Register;
 using Application.Features.Auth.Commands.ResetPassword;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using System;
 using System.Threading.Tasks;
 
 namespace WebAPI.Controllers
@@ -23,31 +24,59 @@ namespace WebAPI.Controllers
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginCommand command)
         {
-            var token = await _mediator.Send(command);
-            return Ok(new { Token = token });
+            try
+            {
+                var token = await _mediator.Send(command);
+                return Ok(new { Token = token });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterCommand command)
         {
-            var token = await _mediator.Send(command);
-            return Ok(new { Token = token });
+            try
+            {
+                var token = await _mediator.Send(command);
+                return Ok(new { Token = token });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         // Şifremi unuttum: reset token üretir (MVP'de yanıtta döner).
         [HttpPost("forgot-password")]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordCommand command)
         {
-            var resetToken = await _mediator.Send(command);
-            return Ok(new { ResetToken = resetToken });
+            try
+            {
+                var resetToken = await _mediator.Send(command);
+                return Ok(new { ResetToken = resetToken });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         // Token + yeni şifre ile hesap şifresini günceller.
         [HttpPost("reset-password")]
         public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordCommand command)
         {
-            await _mediator.Send(command);
-            return Ok(new { Message = "Şifre başarıyla güncellendi." });
+            try
+            {
+                await _mediator.Send(command);
+                return Ok(new { Message = "Şifre başarıyla güncellendi." });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
     }
 }

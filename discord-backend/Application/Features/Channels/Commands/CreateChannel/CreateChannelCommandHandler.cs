@@ -1,4 +1,6 @@
+using Application.Common;
 using Application.Features.Channels.Queries.GetChannelsByServer;
+using Application.Interfaces;
 using Application.Repositories;
 using Domain.Entities;
 using MediatR;
@@ -11,10 +13,17 @@ namespace Application.Features.Channels.Commands.CreateChannel
     public class CreateChannelCommandHandler : IRequestHandler<CreateChannelCommand, ChannelDto>
     {
         private readonly IChannelRepository _channelRepository;
+        private readonly IServerRepository _serverRepository;
+        private readonly IUserContextService _userContextService;
 
-        public CreateChannelCommandHandler(IChannelRepository channelRepository)
+        public CreateChannelCommandHandler(
+            IChannelRepository channelRepository,
+            IServerRepository serverRepository,
+            IUserContextService userContextService)
         {
             _channelRepository = channelRepository;
+            _serverRepository = serverRepository;
+            _userContextService = userContextService;
         }
 
         public async Task<ChannelDto> Handle(CreateChannelCommand request, CancellationToken cancellationToken)
@@ -27,6 +36,13 @@ namespace Application.Features.Channels.Commands.CreateChannel
             if (request.ServerId == Guid.Empty)
             {
                 throw new Exception("Sunucu seçilmedi.");
+            }
+
+            var userId = _userContextService.GetCurrentUserId();
+            var membership = await _serverRepository.GetMembershipAsync(request.ServerId, userId);
+            if (membership == null || !ServerRoles.CanManageChannels(membership.Role))
+            {
+                throw new Exception("Kanal oluşturmak için sahip veya yönetici olmalısın.");
             }
 
             var type = string.IsNullOrWhiteSpace(request.Type) ? "Text" : request.Type.Trim();

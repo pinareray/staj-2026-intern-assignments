@@ -85,6 +85,62 @@ namespace Persistence.Repositories
             await _context.SaveChangesAsync();
         }
 
+        public async Task UpdateMemberRoleAsync(Guid serverId, Guid userId, string role)
+        {
+            var membership = await GetMembershipAsync(serverId, userId);
+            if (membership == null)
+            {
+                throw new Exception("Kullanıcı bu sunucunun üyesi değil.");
+            }
+
+            membership.Role = role;
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task DeleteServerAsync(Guid serverId)
+        {
+            var server = await _context.Servers.FirstOrDefaultAsync(s => s.Id == serverId);
+            if (server == null)
+            {
+                return;
+            }
+
+            var channelIds = await _context.Channels
+                .Where(c => c.ServerId == serverId)
+                .Select(c => c.Id)
+                .ToListAsync();
+
+            if (channelIds.Count > 0)
+            {
+                var starred = _context.StarredMessages.Where(s =>
+                    _context.Messages.Any(m =>
+                        m.Id == s.MessageId && channelIds.Contains(m.ChannelId)));
+                _context.StarredMessages.RemoveRange(starred);
+
+                var messages = _context.Messages.Where(m => channelIds.Contains(m.ChannelId));
+                _context.Messages.RemoveRange(messages);
+
+                var channelMembers = _context.ChannelMembers.Where(cm =>
+                    channelIds.Contains(cm.ChannelId));
+                _context.ChannelMembers.RemoveRange(channelMembers);
+
+                var channels = _context.Channels.Where(c => c.ServerId == serverId);
+                _context.Channels.RemoveRange(channels);
+            }
+
+            var members = _context.ServerMembers.Where(sm => sm.ServerId == serverId);
+            _context.ServerMembers.RemoveRange(members);
+
+            var invites = _context.ServerInvites.Where(i => i.ServerId == serverId);
+            _context.ServerInvites.RemoveRange(invites);
+
+            var inviteLinks = _context.ServerInviteLinks.Where(i => i.ServerId == serverId);
+            _context.ServerInviteLinks.RemoveRange(inviteLinks);
+
+            _context.Servers.Remove(server);
+            await _context.SaveChangesAsync();
+        }
+
         public async Task CreateWithOwnerAsync(
             Server server,
             Guid ownerId,

@@ -53,10 +53,10 @@ export default function ChannelSidebar({
         });
 
         if (!response.ok) {
-          if (response.status === 401 || response.status === 403) {
+          if (response.status === 401) {
             localStorage.removeItem("token");
+            router.push("/login");
           }
-          router.push("/login");
           return;
         }
 
@@ -66,7 +66,7 @@ export default function ChannelSidebar({
         const id = String(data.id ?? data.Id ?? "");
         if (id) localStorage.setItem("userId", id);
       } catch {
-        router.push("/login");
+        // Backend kapalıysa oturumu düşürme
       }
     };
 
@@ -138,7 +138,7 @@ export default function ChannelSidebar({
         );
 
         if (!response.ok) {
-          if (response.status === 401 || response.status === 403) {
+          if (response.status === 401) {
             localStorage.removeItem("token");
             router.push("/login");
           }
@@ -220,7 +220,7 @@ export default function ChannelSidebar({
                 Kanallar
               </div>
               <div className="flex items-center gap-1">
-                {selectedServer && (
+                {selectedServer && canManageChannels && (
                   <button
                     type="button"
                     title="Kanal ayarları"
@@ -232,7 +232,7 @@ export default function ChannelSidebar({
                     </span>
                   </button>
                 )}
-                {selectedServer && (
+                {selectedServer && canManageChannels && (
                   <button
                     type="button"
                     title="Kanal oluştur"
@@ -253,7 +253,7 @@ export default function ChannelSidebar({
                       ? "Bu sunucuda henüz kanal yok."
                       : "Önce bir sunucu seç."}
                   </p>
-                  {selectedServer && (
+                  {selectedServer && canManageChannels && (
                     <button
                       type="button"
                       onClick={() => setIsCreateOpen(true)}
@@ -326,11 +326,6 @@ export default function ChannelSidebar({
             <div className="text-[10px] text-stone-400 tracking-wider truncate lowercase">
               {email || "—"}
             </div>
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="material-symbols-outlined text-stone-400 hover:text-stone-700 text-xl">
-              settings
-            </span>
           </div>
         </button>
       </nav>

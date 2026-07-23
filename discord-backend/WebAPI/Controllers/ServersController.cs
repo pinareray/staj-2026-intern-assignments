@@ -3,7 +3,9 @@ using Application.Features.Servers.Commands.AcceptInvite;
 using Application.Features.Servers.Commands.AddMember;
 using Application.Features.Servers.Commands.CreateInviteLink;
 using Application.Features.Servers.Commands.CreateServer;
+using Application.Features.Servers.Commands.DeleteServer;
 using Application.Features.Servers.Commands.LeaveServer;
+using Application.Features.Servers.Commands.UpdateMemberRole;
 using Application.Features.Servers.Commands.UpdateServer;
 using Application.Features.Servers.Commands.RejectInvite;
 using Application.Features.Servers.Commands.RemoveMember;
@@ -206,6 +208,45 @@ namespace WebAPI.Controllers
                 {
                     ServerId = serverId,
                     UserId = userId
+                });
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPatch("{serverId:guid}/members/{userId:guid}/role")]
+        public async Task<IActionResult> UpdateMemberRole(
+            Guid serverId,
+            Guid userId,
+            [FromBody] UpdateMemberRoleDto dto)
+        {
+            try
+            {
+                var result = await _mediator.Send(new UpdateMemberRoleCommand
+                {
+                    ServerId = serverId,
+                    UserId = userId,
+                    Role = dto.Role
+                });
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpDelete("{serverId:guid}")]
+        public async Task<IActionResult> DeleteServer(Guid serverId)
+        {
+            try
+            {
+                var result = await _mediator.Send(new DeleteServerCommand
+                {
+                    ServerId = serverId
                 });
                 return Ok(result);
             }

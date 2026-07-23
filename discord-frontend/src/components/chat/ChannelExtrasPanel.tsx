@@ -118,9 +118,11 @@ export default function ChannelExtrasPanel({
 
   useEffect(() => {
     if (!isOpen) return;
-    setTab(initialTab);
+    const nextTab =
+      !serverId && initialTab === "members" ? "pins" : initialTab;
+    setTab(nextTab);
     void load();
-  }, [isOpen, initialTab, load]);
+  }, [isOpen, initialTab, load, serverId]);
 
   const handleUnpin = async (messageId: string) => {
     const token = localStorage.getItem("token");
@@ -169,7 +171,7 @@ export default function ChannelExtrasPanel({
               #{channelName || "kanal"}
             </h2>
             <p className="font-hanken text-xs text-stone-500">
-              Üyeler ve sabit mesajlar
+              {serverId ? "Üyeler ve sabit mesajlar" : "Sabit mesajlar"}
             </p>
           </div>
           <button
@@ -184,12 +186,16 @@ export default function ChannelExtrasPanel({
         <div className="flex shrink-0 gap-1 border-b border-stone-200 px-3 pt-3">
           {(
             [
-              {
-                id: "members" as const,
-                label: "Üyeler",
-                icon: "group",
-                count: members.length,
-              },
+              ...(serverId
+                ? [
+                    {
+                      id: "members" as const,
+                      label: "Üyeler",
+                      icon: "group",
+                      count: members.length,
+                    },
+                  ]
+                : []),
               {
                 id: "pins" as const,
                 label: "Sabit mesajlar",

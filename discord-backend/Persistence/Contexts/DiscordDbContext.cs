@@ -22,6 +22,7 @@ namespace Persistence.Contexts
         public DbSet<ServerInviteLink> ServerInviteLinks { get; set; }
         public DbSet<UserBlock> UserBlocks { get; set; }
         public DbSet<UserReport> UserReports { get; set; }
+        public DbSet<Notification> Notifications { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -196,6 +197,22 @@ namespace Persistence.Contexts
                 entity.HasOne<User>()
                     .WithMany()
                     .HasForeignKey(r => r.ReportedUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<Notification>(entity =>
+            {
+                entity.HasIndex(n => n.UserId);
+                entity.HasIndex(n => new { n.UserId, n.IsRead });
+
+                entity.HasOne<User>()
+                    .WithMany()
+                    .HasForeignKey(n => n.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne<User>()
+                    .WithMany()
+                    .HasForeignKey(n => n.ActorUserId)
                     .OnDelete(DeleteBehavior.Restrict);
             });
         }

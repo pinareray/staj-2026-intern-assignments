@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import CreateServerModal from "@/components/modals/CreateServerModal";
 import { API_BASE_URL } from "@/services";
 import {
+  SERVER_SIDEBAR_DEFAULT,
   SERVER_SIDEBAR_LABEL_THRESHOLD,
   SERVER_SIDEBAR_MAX,
   SERVER_SIDEBAR_MIN,
@@ -17,6 +18,7 @@ import type { ServerItem } from "@/models";
 type ServerSidebarProps = {
   currentServerId: string | null;
   messagesActive?: boolean;
+  friendsActive?: boolean;
   totalUnread?: number;
   onMessagesHome?: () => void;
   onOpenFriends?: () => void;
@@ -27,6 +29,7 @@ type ServerSidebarProps = {
 export default function ServerSidebar({
   currentServerId,
   messagesActive = false,
+  friendsActive = false,
   totalUnread = 0,
   onMessagesHome,
   onOpenFriends,
@@ -37,7 +40,11 @@ export default function ServerSidebar({
   const [servers, setServers] = useState<ServerItem[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [width, setWidth] = useState(() => loadServerSidebarWidth());
+  const [width, setWidth] = useState(SERVER_SIDEBAR_DEFAULT);
+
+  useEffect(() => {
+    setWidth(loadServerSidebarWidth());
+  }, []);
 
   const handleWidthChange = useCallback((next: number) => {
     setWidth(next);
@@ -69,10 +76,11 @@ export default function ServerSidebar({
       });
 
       if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
+        // Ağ/sunucu hatasında oturumu düşürme; sadece gerçekten geçersiz token.
+        if (response.status === 401) {
           localStorage.removeItem("token");
+          router.push("/login");
         }
-        router.push("/login");
         return;
       }
 
@@ -87,13 +95,19 @@ export default function ServerSidebar({
 
       setServers(mapped);
 
-      if (!messagesActive && !currentServerId && mapped.length > 0) {
+      // Mesajlar / Arkadaşlar görünümündeyken otomatik sunucu seçme.
+      if (
+        !messagesActive &&
+        !friendsActive &&
+        !currentServerId &&
+        mapped.length > 0
+      ) {
         onServerSelect(mapped[0]);
       }
     } catch {
-      router.push("/login");
+      // Backend kapalıysa oturumu silme
     }
-  }, [router, currentServerId, onServerSelect, messagesActive]);
+  }, [router, currentServerId, onServerSelect, messagesActive, friendsActive]);
 
   useEffect(() => {
     loadServers();
@@ -193,15 +207,34 @@ export default function ServerSidebar({
             title="Arkadaşlar"
             aria-label="Arkadaşlar"
             onClick={() => onOpenFriends?.()}
-            className={`group relative flex shrink-0 items-center rounded-2xl border-2 border-stone-200 bg-white shadow-sm transition-all duration-300 hover:rounded-xl hover:bg-primary-container/10 ${
-              compact ? "h-12 w-12 justify-center" : "h-12 w-full gap-3 px-3"
-            }`}
+            className={`group relative flex shrink-0 items-center rounded-2xl border-2 shadow-sm transition-all duration-300 hover:rounded-xl ${
+              friendsActive
+                ? "border-primary-container/40 bg-primary-container/10"
+                : "border-stone-200 bg-white hover:bg-primary-container/10"
+            } ${compact ? "h-12 w-12 justify-center" : "h-12 w-full gap-3 px-3"}`}
           >
-            <span className="material-symbols-outlined text-xl text-stone-500 group-hover:text-primary-container">
+            <span
+              className={`material-symbols-outlined text-xl ${
+                friendsActive
+                  ? "text-primary-container"
+                  : "text-stone-500 group-hover:text-primary-container"
+              }`}
+              style={
+                friendsActive
+                  ? { fontVariationSettings: "'FILL' 1" }
+                  : undefined
+              }
+            >
               group
             </span>
             {showLabels ? (
-              <span className="truncate font-hanken text-sm font-semibold text-stone-600 group-hover:text-primary-container">
+              <span
+                className={`truncate font-hanken text-sm font-semibold ${
+                  friendsActive
+                    ? "text-primary-container"
+                    : "text-stone-600 group-hover:text-primary-container"
+                }`}
+              >
                 Arkadaşlar
               </span>
             ) : (
@@ -213,8 +246,8 @@ export default function ServerSidebar({
 
           <button
             type="button"
-            title="Görüntülü arama"
-            aria-label="Görüntülü arama"
+            title="Toplantı"
+            aria-label="Toplantı"
             onClick={() => router.push("/meet")}
             className={`group relative flex shrink-0 items-center rounded-2xl border-2 border-stone-200 bg-white shadow-sm transition-all duration-300 hover:rounded-xl hover:bg-primary-container/10 ${
               compact ? "h-12 w-12 justify-center" : "h-12 w-full gap-3 px-3"
@@ -225,11 +258,11 @@ export default function ServerSidebar({
             </span>
             {showLabels ? (
               <span className="truncate font-hanken text-sm font-semibold text-stone-600 group-hover:text-primary-container">
-                Görüntülü
+                Toplantı
               </span>
             ) : (
               <span className="pointer-events-none absolute left-full z-50 ml-2 whitespace-nowrap rounded-md bg-stone-900 px-2 py-1 font-hanken text-[10px] font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-                Görüntülü arama
+                Toplantı
               </span>
             )}
           </button>

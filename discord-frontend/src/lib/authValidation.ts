@@ -39,8 +39,12 @@ export function validateEmail(email: string): string | null {
 }
 
 export function getAuthErrorMessage(status: number, fallback: string): string {
-  if (status === 500) {
-    return "Sunucu şu an veritabanına bağlanamıyor. Biraz sonra tekrar dene veya internet/hotspot bağlantını kontrol et.";
+  if (status === 0) {
+    return "Sunucuya bağlanılamadı. Backend'in (localhost:5243) çalıştığından emin ol.";
+  }
+  // Gerçek sunucu hatası; auth hataları artık 400 dönmeli.
+  if (status >= 500 && !fallback) {
+    return "Sunucu hatası. Biraz sonra tekrar dene.";
   }
   if (status === 401 || status === 400) {
     return fallback;

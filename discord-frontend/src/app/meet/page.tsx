@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { generateMeetCode } from "@/services";
@@ -11,7 +10,7 @@ export default function MeetHomePage() {
 
   useEffect(() => {
     if (!localStorage.getItem("token")) {
-      router.replace("/login?returnUrl=/meet");
+      router.replace("/login");
     }
   }, [router]);
 
@@ -27,18 +26,32 @@ export default function MeetHomePage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,#5c1520_0%,#250902_45%,#0a0506_100%)] px-4">
-      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#1a0f10]/85 p-8 shadow-2xl backdrop-blur-md">
+    <div className="relative flex min-h-screen items-center justify-center bg-background px-4">
+      <div
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_-5%,rgba(173,40,49,0.12),transparent_55%)]"
+        aria-hidden
+      />
+
+      <button
+        type="button"
+        onClick={() => router.push("/app")}
+        className="absolute left-4 top-4 z-10 inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-2 font-hanken text-sm font-medium text-stone-600 shadow-sm transition hover:border-primary-container/40 hover:text-primary-container"
+      >
+        <span className="material-symbols-outlined text-lg">arrow_back</span>
+        Geri
+      </button>
+
+      <div className="relative w-full max-w-md rounded-3xl border border-stone-200 bg-white p-8 shadow-xl shadow-stone-200/60">
         <div className="text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-container/20">
-            <span className="material-symbols-outlined text-3xl text-[#e1bfbd]">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-container/10">
+            <span className="material-symbols-outlined text-3xl text-primary-container">
               videocam
             </span>
           </div>
-          <h1 className="mt-4 font-hanken text-2xl font-extrabold text-white">
-            Görüntülü arama
+          <h1 className="mt-4 font-hanken text-2xl font-extrabold text-stone-900">
+            Toplantı
           </h1>
-          <p className="mt-2 font-hanken text-sm text-white/60">
+          <p className="mt-2 font-hanken text-sm text-stone-500">
             Yeni bir görüşme başlat veya linkteki kodla katıl. Arkadaşlarına
             linki kopyalayıp atabilirsin.
           </p>
@@ -53,37 +66,30 @@ export default function MeetHomePage() {
         </button>
 
         <div className="my-6 flex items-center gap-3">
-          <div className="h-px flex-1 bg-white/10" />
-          <span className="font-hanken text-xs text-white/40">veya</span>
-          <div className="h-px flex-1 bg-white/10" />
+          <div className="h-px flex-1 bg-stone-200" />
+          <span className="font-hanken text-xs text-stone-400">veya</span>
+          <div className="h-px flex-1 bg-stone-200" />
         </div>
 
         <label className="block space-y-2">
-          <span className="font-hanken text-xs font-bold uppercase tracking-wider text-white/40">
+          <span className="font-hanken text-xs font-bold uppercase tracking-wider text-stone-400">
             Kod ile katıl
           </span>
           <input
             value={joinCode}
             onChange={(e) => setJoinCode(e.target.value)}
             placeholder="örn. a7Kx9mQ2"
-            className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 font-hanken text-sm text-white outline-none placeholder:text-white/30 focus:border-primary-container/50"
+            className="w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5 font-hanken text-sm text-stone-900 outline-none placeholder:text-stone-400 focus:border-primary-container/50 focus:ring-1 focus:ring-primary-container/30"
           />
         </label>
         <button
           type="button"
           disabled={!joinCode.trim()}
           onClick={joinExisting}
-          className="mt-3 w-full rounded-xl border border-white/15 bg-white/10 py-3 font-hanken text-sm font-semibold text-white transition hover:bg-white/15 disabled:opacity-40"
+          className="mt-3 w-full rounded-xl border border-stone-200 bg-stone-100 py-3 font-hanken text-sm font-semibold text-stone-700 transition hover:bg-stone-200 disabled:opacity-40"
         >
           Katıl
         </button>
-
-        <Link
-          href="/app"
-          className="mt-6 block text-center font-hanken text-sm text-white/45 hover:text-white/80"
-        >
-          Uygulamaya dön
-        </Link>
       </div>
     </div>
   );
