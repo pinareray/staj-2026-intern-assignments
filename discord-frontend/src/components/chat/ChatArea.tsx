@@ -1153,7 +1153,7 @@ export default function ChatArea({
             {isDmMode || selectedChannel?.type === "DM"
               ? "alternate_email"
               : isVoiceChannel
-                ? "volume_up"
+                ? "headphones"
                 : "tag"}
           </span>
           <div>
@@ -1183,7 +1183,7 @@ export default function ChatArea({
                   ? selectedChannel.type === "DM"
                     ? "Özel mesaj"
                     : isVoiceChannel
-                      ? "Ses kanalı"
+                      ? "Canlı ses odası"
                       : selectedChannel.type === "Announcement"
                         ? "Duyuru kanalı"
                         : "Sohbet kanalı"

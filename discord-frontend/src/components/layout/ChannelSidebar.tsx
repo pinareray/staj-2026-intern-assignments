@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import CreateChannelModal from "@/components/modals/CreateChannelModal";
 import ChannelSettingsModal from "@/components/modals/ChannelSettingsModal";
@@ -18,6 +18,19 @@ type ChannelSidebarProps = {
   onServerLeft?: () => void;
 };
 
+type ChannelCategory = {
+  id: string;
+  label: string;
+  icon: string;
+  channels: ChannelItem[];
+};
+
+function channelIcon(type: string) {
+  if (type === "Announcement") return "campaign";
+  if (type === "Voice") return "volume_up";
+  return "tag";
+}
+
 export default function ChannelSidebar({
   selectedServer,
   selectedChannelId,
@@ -27,6 +40,7 @@ export default function ChannelSidebar({
   onServerLeft,
 }: ChannelSidebarProps) {
   const router = useRouter();
+  const menuRef = useRef<HTMLDivElement>(null);
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [channels, setChannels] = useState<ChannelItem[]>([]);
@@ -34,8 +48,10 @@ export default function ChannelSidebar({
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [isServerSettingsOpen, setIsServerSettingsOpen] = useState(false);
+  const [serverMenuOpen, setServerMenuOpen] = useState(false);
   const [canManageChannels, setCanManageChannels] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -167,43 +183,93 @@ export default function ChannelSidebar({
     loadChannels();
   }, [selectedServer, router, onChannelsLoaded, refreshKey]);
 
+  useEffect(() => {
+    setServerMenuOpen(false);
+  }, [selectedServer?.id]);
+
+  useEffect(() => {
+    if (!serverMenuOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("[data-server-menu]")) return;
+      setServerMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [serverMenuOpen]);
+
+  const categories = useMemo<ChannelCategory[]>(() => {
+    const info = channels.filter((c) => c.type === "Announcement");
+    const text = channels.filter(
+      (c) => c.type !== "Announcement" && c.type !== "Voice"
+    );
+    const voice = channels.filter((c) => c.type === "Voice");
+
+    const groups: ChannelCategory[] = [];
+    if (info.length > 0) {
+      groups.push({
+        id: "info",
+        label: "Bilgi",
+        icon: "campaign",
+        channels: info,
+      });
+    }
+    groups.push({
+      id: "text",
+      label: "Metin Kanalları",
+      icon: "tag",
+      channels: text,
+    });
+    groups.push({
+      id: "voice",
+      label: "Ses Kanalları",
+      icon: "volume_up",
+      channels: voice,
+    });
+    return groups;
+  }, [channels]);
+
+  const toggleCategory = (id: string) => {
+    setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
   return (
     <>
-      <nav className="w-72 flex flex-col border-r border-stone-200 bg-white shrink-0">
-        <header className="h-16 px-6 flex items-center justify-between border-b border-stone-200">
-          {selectedServer ? (
-            <button
-              type="button"
-              title="Sunucu ayarları"
-              onClick={() => setIsServerSettingsOpen(true)}
-              className="min-w-0 flex-1 text-left font-libre text-lg tracking-tight text-stone-900 truncate hover:text-primary-container transition-colors"
-            >
-              {selectedServer.name}
-            </button>
-          ) : (
-            <h1 className="font-libre text-lg tracking-tight text-stone-900 truncate">
-              Sunucu Seçilmedi
-            </h1>
-          )}
-          <div className="flex items-center gap-1 shrink-0">
-            {selectedServer && (
+      <nav className="flex w-72 shrink-0 flex-col border-r border-stone-200 bg-white">
+        <header
+          className="relative z-30 h-14 shrink-0 border-b border-stone-200"
+          data-server-menu
+          ref={menuRef}
+        >
+          <div className="flex h-full items-center gap-1 px-3">
+            {selectedServer ? (
               <button
                 type="button"
-                title="Üye davet et"
-                onClick={() => setIsInviteOpen(true)}
-                className="rounded-lg p-1.5 text-stone-400 transition-colors hover:bg-stone-100 hover:text-primary-container"
+                onClick={() => setServerMenuOpen((v) => !v)}
+                className="group flex min-w-0 flex-1 items-center gap-1 rounded-lg px-2 py-2 text-left transition-colors hover:bg-stone-100"
               >
-                <span className="material-symbols-outlined text-xl">
-                  person_add
+                <span className="min-w-0 flex-1 truncate font-libre text-base tracking-tight text-stone-900">
+                  {selectedServer.name}
+                </span>
+                <span
+                  className={`material-symbols-outlined shrink-0 text-xl text-stone-400 transition-transform group-hover:text-stone-700 ${
+                    serverMenuOpen ? "rotate-180" : ""
+                  }`}
+                >
+                  expand_more
                 </span>
               </button>
+            ) : (
+              <h1 className="px-2 font-libre text-base tracking-tight text-stone-900 truncate">
+                Sunucu Seçilmedi
+              </h1>
             )}
             {selectedServer && onCollapse && (
               <button
                 type="button"
                 title="Kanal panelini gizle"
                 onClick={onCollapse}
-                className="rounded-lg p-1.5 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700"
+                className="shrink-0 rounded-lg p-1.5 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700"
               >
                 <span className="material-symbols-outlined text-xl">
                   left_panel_close
@@ -211,97 +277,183 @@ export default function ChannelSidebar({
               </button>
             )}
           </div>
+
+          {selectedServer && serverMenuOpen && (
+            <div className="absolute left-3 right-3 top-[calc(100%-0.25rem)] z-40 overflow-hidden rounded-xl border border-stone-200 bg-white py-1.5 shadow-[0_12px_32px_rgba(28,25,23,0.12)]">
+              <button
+                type="button"
+                onClick={() => {
+                  setServerMenuOpen(false);
+                  setIsInviteOpen(true);
+                }}
+                className="flex w-full items-center gap-3 px-3 py-2.5 text-left font-hanken text-sm text-stone-700 transition-colors hover:bg-stone-50"
+              >
+                <span className="material-symbols-outlined text-lg text-primary-container">
+                  person_add
+                </span>
+                Sunucuya davet et
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setServerMenuOpen(false);
+                  setIsServerSettingsOpen(true);
+                }}
+                className="flex w-full items-center gap-3 px-3 py-2.5 text-left font-hanken text-sm text-stone-700 transition-colors hover:bg-stone-50"
+              >
+                <span className="material-symbols-outlined text-lg text-stone-400">
+                  settings
+                </span>
+                Sunucu ayarları
+              </button>
+              {canManageChannels && (
+                <>
+                  <div className="my-1.5 border-t border-stone-100" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setServerMenuOpen(false);
+                      setIsCreateOpen(true);
+                    }}
+                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left font-hanken text-sm text-stone-700 transition-colors hover:bg-stone-50"
+                  >
+                    <span className="material-symbols-outlined text-lg text-stone-400">
+                      add_circle
+                    </span>
+                    Kanal oluştur
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setServerMenuOpen(false);
+                      setIsSettingsOpen(true);
+                    }}
+                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left font-hanken text-sm text-stone-700 transition-colors hover:bg-stone-50"
+                  >
+                    <span className="material-symbols-outlined text-lg text-stone-400">
+                      tune
+                    </span>
+                    Kanalları yönet
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </header>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar py-3 space-y-6">
-          <div className="px-3">
-            <div className="flex items-center justify-between px-3 py-1">
-              <div className="flex items-center text-stone-400 uppercase tracking-widest text-[10px] font-bold">
-                Kanallar
-              </div>
-              <div className="flex items-center gap-1">
-                {selectedServer && canManageChannels && (
-                  <button
-                    type="button"
-                    title="Kanal ayarları"
-                    onClick={() => setIsSettingsOpen(true)}
-                    className="text-stone-400 hover:text-primary-container transition-colors"
-                  >
-                    <span className="material-symbols-outlined text-lg">
-                      settings
-                    </span>
-                  </button>
-                )}
-                {selectedServer && canManageChannels && (
-                  <button
-                    type="button"
-                    title="Kanal oluştur"
-                    onClick={() => setIsCreateOpen(true)}
-                    className="text-stone-400 hover:text-primary-container transition-colors"
-                  >
-                    <span className="material-symbols-outlined text-lg">add</span>
-                  </button>
-                )}
-              </div>
-            </div>
+        <div className="custom-scrollbar flex-1 space-y-4 overflow-y-auto py-3">
+          {!selectedServer && (
+            <p className="px-5 py-4 font-hanken text-xs text-stone-400">
+              Önce bir sunucu seç.
+            </p>
+          )}
 
-            <div className="mt-2 space-y-1">
-              {channels.length === 0 && (
-                <div className="px-3 py-4 space-y-3">
-                  <p className="text-xs text-stone-400 font-hanken">
-                    {selectedServer
-                      ? "Bu sunucuda henüz kanal yok."
-                      : "Önce bir sunucu seç."}
-                  </p>
-                  {selectedServer && canManageChannels && (
+          {selectedServer && channels.length === 0 && (
+            <div className="space-y-3 px-5 py-4">
+              <p className="font-hanken text-xs text-stone-400">
+                Bu sunucuda henüz kanal yok.
+              </p>
+              {canManageChannels && (
+                <button
+                  type="button"
+                  onClick={() => setIsCreateOpen(true)}
+                  className="w-full rounded-lg bg-primary-container/10 py-2.5 font-hanken text-sm font-semibold text-primary-container transition-colors hover:bg-primary-container/20"
+                >
+                  Kanal Oluştur
+                </button>
+              )}
+            </div>
+          )}
+
+          {selectedServer &&
+            categories.map((category) => {
+              const isCollapsed = Boolean(collapsed[category.id]);
+              const showEmpty =
+                category.channels.length === 0 &&
+                (category.id === "text" || category.id === "voice");
+
+              if (category.channels.length === 0 && category.id === "info") {
+                return null;
+              }
+
+              return (
+                <div key={category.id} className="px-2">
+                  <div className="group mb-1 flex items-center gap-0.5 px-1">
                     <button
                       type="button"
-                      onClick={() => setIsCreateOpen(true)}
-                      className="w-full rounded-lg bg-primary-container/10 text-primary-container py-2.5 text-sm font-hanken font-semibold hover:bg-primary-container/20 transition-colors"
+                      onClick={() => toggleCategory(category.id)}
+                      className="flex min-w-0 flex-1 items-center gap-0.5 rounded-md px-1 py-1 text-left transition-colors hover:bg-stone-50"
                     >
-                      Kanal Oluştur
+                      <span
+                        className={`material-symbols-outlined text-base text-stone-400 transition-transform ${
+                          isCollapsed ? "-rotate-90" : ""
+                        }`}
+                      >
+                        expand_more
+                      </span>
+                      <span className="truncate font-hanken text-[10px] font-bold uppercase tracking-[0.14em] text-stone-400">
+                        {category.label}
+                      </span>
                     </button>
+                    {canManageChannels && (
+                      <button
+                        type="button"
+                        title={`${category.label} — kanal oluştur`}
+                        onClick={() => setIsCreateOpen(true)}
+                        className="rounded-md p-1 text-stone-300 opacity-0 transition-all hover:bg-stone-100 hover:text-primary-container group-hover:opacity-100"
+                      >
+                        <span className="material-symbols-outlined text-base">
+                          add
+                        </span>
+                      </button>
+                    )}
+                  </div>
+
+                  {!isCollapsed && (
+                    <div className="space-y-0.5">
+                      {showEmpty && (
+                        <p className="px-3 py-2 font-hanken text-[11px] text-stone-400">
+                          Bu kategoride kanal yok.
+                        </p>
+                      )}
+                      {category.channels.map((channel) => {
+                        const isActive = selectedChannelId === channel.id;
+                        return (
+                          <button
+                            key={channel.id}
+                            type="button"
+                            onClick={() => onChannelSelect(channel)}
+                            className={`group/ch flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 transition-all ${
+                              isActive
+                                ? "bg-primary-container/10 text-stone-900"
+                                : "text-stone-500 hover:bg-stone-100 hover:text-stone-800"
+                            }`}
+                          >
+                            <span
+                              className={`material-symbols-outlined text-[18px] ${
+                                isActive
+                                  ? "text-primary-container"
+                                  : "text-stone-400 group-hover/ch:text-stone-600"
+                              }`}
+                              style={
+                                isActive
+                                  ? { fontVariationSettings: "'FILL' 1" }
+                                  : undefined
+                              }
+                            >
+                              {channelIcon(channel.type)}
+                            </span>
+                            <span className="truncate font-hanken text-sm">
+                              {channel.name}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
-              )}
-
-              {channels.map((channel) => {
-                const isActive = selectedChannelId === channel.id;
-                return (
-                  <button
-                    key={channel.id}
-                    type="button"
-                    onClick={() => onChannelSelect(channel)}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all group ${
-                      isActive
-                        ? "bg-primary-container/10 text-stone-900"
-                        : "text-stone-500 hover:bg-stone-100 hover:text-stone-900"
-                    }`}
-                  >
-                    <span
-                      className={`material-symbols-outlined ${
-                        isActive
-                          ? "text-primary-container"
-                          : "text-stone-400 group-hover:text-stone-700"
-                      }`}
-                      style={
-                        isActive
-                          ? { fontVariationSettings: "'FILL' 1" }
-                          : undefined
-                      }
-                    >
-                      {channel.type === "Announcement"
-                        ? "campaign"
-                        : channel.type === "Voice"
-                          ? "volume_up"
-                          : "tag"}
-                    </span>
-                    <span className="text-sm font-hanken">{channel.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+              );
+            })}
         </div>
 
         <button
@@ -309,21 +461,21 @@ export default function ChannelSidebar({
           onClick={() => {
             if (username) router.push(`/profile/${encodeURIComponent(username)}`);
           }}
-          className="p-3 bg-stone-50 border-t border-stone-200 flex items-center gap-3 w-full text-left hover:bg-stone-100 transition-colors"
+          className="flex w-full items-center gap-3 border-t border-stone-200 bg-stone-50 p-3 text-left transition-colors hover:bg-stone-100"
         >
           <div className="relative">
-            <div className="w-10 h-10 rounded-full overflow-hidden border border-primary-container/30 bg-primary-container/10 flex items-center justify-center">
-              <span className="font-libre text-sm text-primary-container font-bold uppercase">
+            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-primary-container/30 bg-primary-container/10">
+              <span className="font-libre text-sm font-bold uppercase text-primary-container">
                 {username ? username.charAt(0) : "?"}
               </span>
             </div>
-            <div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white" />
+            <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm text-stone-900 truncate font-hanken">
+          <div className="min-w-0 flex-1">
+            <div className="truncate font-hanken text-sm text-stone-900">
               {username || "Yükleniyor..."}
             </div>
-            <div className="text-[10px] text-stone-400 tracking-wider truncate lowercase">
+            <div className="truncate font-hanken text-[10px] lowercase tracking-wider text-stone-400">
               {email || "—"}
             </div>
           </div>
